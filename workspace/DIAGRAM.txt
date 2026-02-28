@@ -1,5 +1,5 @@
      ╔══════════════════════════════════════════════════════════════════════════╗
-     ║                        YOUR WHATSAPP (Saket)                            ║
+     ║                           YOUR WHATSAPP                                 ║
      ╚══════════════════════════════╤═══════════════════════════════════════════╝
                                     │
                          ┌──────────▼──────────┐
@@ -122,18 +122,11 @@
 
   check_amazon.py runs
         │
-        ├─► check_due_reminders()
-        │     reads reminders.json
-        │     for each reminder where remind_at ≤ now:
-        │       → send_whatsapp("⏰ Reminder: [task]")
-        │       → remove from reminders.json
-        │
-        └─► IMAP scan (Gmail, direct)
-              search FROM:amazon unseen
-              compare against amazon_emails_sent.json
-              if new email found:
-                → send_whatsapp("📦 New Amazon email: [subject]")
-                → save ID to amazon_emails_sent.json
+        └─► check_due_reminders()
+              reads reminders.json
+              for each reminder where remind_at ≤ now:
+                → send_whatsapp("⏰ Reminder: [task]")
+                → remove from reminders.json
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -144,8 +137,7 @@
   check_text.py       ← text pipeline, imports all functions from above
   transcribe.py       ← faster-whisper wrapper (called as subprocess)
   groq_proxy.py       ← OpenClaw silencer on :11435, returns empty response
-  check_amazon.py     ← heartbeat: reminders + Amazon email scan
+  check_amazon.py     ← heartbeat: fires due reminders
   config/mcporter.json← Zapier MCP endpoint URL + auth token
   reminders.json      ← active reminders [{task, remind_at, id}]
-  amazon_emails_sent.json ← seen Amazon email IDs (dedup)
   audio_state.json    ← tracks which OGG files already processed
