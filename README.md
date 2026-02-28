@@ -32,39 +32,51 @@ See `workspace/DIAGRAM.txt` for the full architecture.
 - Zapier account — for Google Calendar and Gmail actions
 - ngrok (or any tunnel) — to expose the OpenClaw gateway to Twilio
 
+> **Windows only** — requires OpenClaw, Windows Task Scheduler, and Python 3.10+.
+
 ---
 
 ## Setup
 
-**1. Copy workspace files**
-```
-%USERPROFILE%\.openclaw\workspace\
-```
-Place all files from `workspace/` in this directory.
-
-**2. Install Python dependencies**
+**1. Install Python dependencies**
 ```
 pip install faster-whisper edge-tts av
 ```
 
+**2. Copy workspace files**
+
+Place all files from `workspace/` into:
+```
+%USERPROFILE%\.openclaw\workspace\
+```
+Create the directory if it doesn't exist. OpenClaw expects its scripts here.
+
 **3. Set environment variables**
 
-Copy `.env.example` to `.env` and fill in your values. Load them before running (e.g. via a launcher script or Windows environment variables).
+Open **System Properties → Environment Variables** (or search "Edit the system environment variables" in Start). Add each variable from `.env.example` as a User variable. Alternatively, set them in your shell before launching.
 
 **4. Configure Zapier MCP**
 
 - Go to [zapier.com/ai-actions](https://zapier.com/ai-actions)
 - Add these AI Actions: **Gmail Find Email**, **Google Calendar Find Events**, **Google Calendar Quick Add Event**, **Google Calendar Delete Event**
-- Open the MCP tab, copy the connection URL
-- Edit `workspace/config/mcporter.json` and replace `YOUR_ZAPIER_MCP_TOKEN` with the full URL
+- Open the **MCP** tab, copy the connection URL
+- Edit `workspace/config/mcporter.json` and replace `YOUR_ZAPIER_MCP_TOKEN` with that URL
 
 **5. Install OpenClaw hooks**
 
-Copy `hooks/audio-transcribe/` and `hooks/text-handler/` into your OpenClaw hooks directory:
+Copy `hooks/audio-transcribe/` and `hooks/text-handler/` into:
 ```
 %USERPROFILE%\.openclaw\hooks\
 ```
-Restart the OpenClaw gateway.
+Then restart the OpenClaw gateway.
+
+**6. Set up reminder heartbeat**
+
+Open **Task Scheduler** → Create Basic Task:
+- Trigger: Daily, repeat every 30 minutes
+- Action: Start a program → `python` → Arguments: `%USERPROFILE%\.openclaw\workspace\check_amazon.py`
+
+This fires any reminders whose time has passed.
 
 ---
 
