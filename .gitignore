@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+audio_state.json
+amazon_emails_sent.json
+reminders.json
+proxy.log
+text-handler.log
+*.tmp
+*.bak
+*.ogg
+*.mp3
+tts_tmp_*
+.openclaw/
