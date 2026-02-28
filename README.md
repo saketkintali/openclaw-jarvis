@@ -96,6 +96,8 @@ This fires any reminders whose time has passed.
 
 ## How it works
 
+OpenClaw's built-in agent is a generic chatbot — it has no access to weather APIs, Google Calendar, or Gmail. Python hooks are OpenClaw's extension mechanism: they intercept each message, classify intent using Groq (llama-3.1-8b-instant), fetch real data from the appropriate source, then generate a Jarvis-style reply via Groq (llama-3.3-70b-versatile). `groq_proxy.py` silences the built-in agent so only the hook's reply is sent — without it, both would fire and you'd get two WhatsApp messages every time.
+
 Every incoming WhatsApp message triggers one of two OpenClaw hooks:
 
 - **text-handler** fires on text messages → runs `check_text.py`
@@ -108,3 +110,6 @@ Both scripts call `classify_intent()` (Groq llama-3.1-8b-instant, temp=0) to rou
 `check_amazon.py` runs every ~30 minutes via Windows Task Scheduler to fire due reminders.
 
 See `workspace/DIAGRAM.txt` for the complete flow.
+
+> **Why not use OpenClaw's agent with tool calling?**
+> Modern LLMs (including Groq's Llama 3.1+) support function/tool calling — where the LLM decides which tool to invoke and the framework executes it. This would eliminate hooks and `groq_proxy` entirely. Whether OpenClaw's agent loop supports the full cycle (define tools → LLM calls tool → execute → return result → final answer) is unclear. Python hooks implement that loop manually with full control in the meantime.
