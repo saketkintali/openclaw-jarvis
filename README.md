@@ -1,6 +1,6 @@
 # OpenClaw Jarvis
 
-A WhatsApp AI assistant (Jarvis) that runs on [OpenClaw](https://openclaw.ai), using Groq for fast LLM responses, Zapier for Gmail and Google Calendar, and local speech-to-text for voice messages.
+A personal WhatsApp AI assistant (Jarvis) that runs on [OpenClaw](https://openclaw.ai). Talk to it by text or voice and it handles your day — checking weather and time worldwide, reading Gmail, managing Google Calendar, finding places nearby, answering nutrition questions, setting reminders, and answering general questions. Uses Groq for fast LLM responses, Zapier for Gmail and Google Calendar, OpenStreetMap for nearby search, and local speech-to-text for voice messages.
 
 ---
 
@@ -90,7 +90,6 @@ This fires any reminders whose time has passed.
 | `GROQ_API_KEY` | Yes | From [console.groq.com](https://console.groq.com) |
 | `DEFAULT_LOCATION` | No | ZIP code or city for weather/time default (e.g. `10001`) |
 | `DEFAULT_LOCATION_NAME` | No | Human-readable city name for that default (e.g. `New York`) |
-| `USDA_API_KEY` | No | From [fdc.nal.usda.gov](https://fdc.nal.usda.gov/api-key-signup) — free, needed for nutrition lookups |
 
 ---
 
