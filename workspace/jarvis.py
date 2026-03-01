@@ -24,6 +24,8 @@ DEFAULT_LOCATION_NAME = os.environ.get("DEFAULT_LOCATION_NAME", "New York")  # H
 GROQ_API_KEY          = os.environ.get("GROQ_API_KEY", "")            # From console.groq.com
 GROQ_MODEL            = "llama-3.3-70b-versatile"
 
+USDA_API_KEY          = os.environ.get("USDA_API_KEY", "")            # From api.nal.usda.gov
+
 # ── Weather codes ─────────────────────────────────────────────────────────────
 WEATHER_CODES = {
     0: "Clear sky ☀️", 1: "Mainly clear 🌤️", 2: "Partly cloudy ⛅", 3: "Overcast ☁️",
@@ -479,7 +481,7 @@ def fetch_nearby(user_query, location=None):
         if detail:
             line += f" — {', '.join(detail[:3])}"
         lines.append(line)
-        if len(lines) == 5:
+        if len(lines) == 3:
             break
 
     if not lines:
@@ -1038,10 +1040,61 @@ def get_groq_response(user_text):
         print(f"Groq error: {e}")
         return None
 
+# ── Nutrition (USDA FoodData Central) ────────────────────────────────────────
+_USDA_NUTRIENTS = {
+    "208": ("Calories", "kcal"),
+    "203": ("Protein", "g"),
+    "204": ("Fat", "g"),
+    "205": ("Carbs", "g"),
+    "291": ("Fiber", "g"),
+    "269": ("Sugar", "g"),
+}
+
+def fetch_nutrition(query):
+    """Look up macros and calories via USDA FoodData Central /foods/search.
+    Returns formatted string, 'no_food_found', or None on error.
+    Nutrient values are per 100g (USDA standard serving).
+    """
+    if not USDA_API_KEY:
+        print("USDA_API_KEY not set")
+        return None
+    try:
+        url = (
+            "https://api.nal.usda.gov/fdc/v1/foods/search"
+            f"?query={urllib.parse.quote(query)}"
+            f"&api_key={USDA_API_KEY}"
+            "&pageSize=3"
+            "&dataType=Foundation,SR%20Legacy"
+        )
+        data = json.loads(urllib.request.urlopen(url, timeout=10).read())
+        foods = data.get("foods", [])
+        if not foods:
+            return "no_food_found"
+
+        food = foods[0]
+        name = food.get("description", query).title()
+        by_num = {n["nutrientNumber"]: n.get("value") for n in food.get("foodNutrients", [])
+                  if n.get("nutrientNumber") and n.get("value") is not None}
+
+        parts = []
+        for num, (label, unit) in _USDA_NUTRIENTS.items():
+            val = by_num.get(num)
+            if val is not None:
+                parts.append(f"{label}: {val}{unit}")
+
+        if not parts:
+            return "no_food_found"
+
+        return f"{name} (per 100g): " + ", ".join(parts)
+    except Exception as e:
+        print(f"USDA nutrition error: {e}")
+        return None
+
+
 # ── Intent classification ─────────────────────────────────────────────────────
 _INTENT_CATEGORIES = {
     "reminder", "weather", "time", "email",
-    "calendar_find", "calendar_create", "nearby", "general"
+    "calendar_find", "calendar_create", "nearby", "nutrition", "general"
 }
 
 def _keyword_fallback(text):
@@ -1055,6 +1108,8 @@ def _keyword_fallback(text):
     tl = text.lower()
     if any(w in tl for w in ("nearby", "near me", "close by", "around here", "find a ", "find me a", "restaurant", "cafe", "pharmacy", "hospital")):
         return "nearby"
+    if any(w in tl for w in ("calorie", "calories", "macro", "macros", "protein", "carb", "carbs", "nutrition", "fat in", "how much fat", "how many calories")):
+        return "nutrition"
     return "general"
 
 def classify_intent(text):
@@ -1072,6 +1127,7 @@ def classify_intent(text):
         "calendar_find — asking about existing events, schedule, meetings, or availability\n"
         "calendar_create — creating, adding, booking, or scheduling a new event\n"
         "nearby — finding nearby places: restaurants, cafes, bars, pharmacies, hospitals, shops, etc.\n"
+        "nutrition — calories, macros, protein, fat, carbs, or nutrition info for any food\n"
         "general — anything else\n\n"
         "location: the specific city or place explicitly mentioned, or null if none. "
         "Do not infer locations from context (e.g. 'a walk', 'a trip', 'outside' are not locations)."

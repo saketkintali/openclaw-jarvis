@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
-    classify_intent, fetch_weather, fetch_time, fetch_nearby,
+    classify_intent, fetch_weather, fetch_time, fetch_nearby, fetch_nutrition,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
     parse_reminder_groq, save_reminder,
     get_groq_response, send_whatsapp, send_whatsapp_audio,
@@ -188,11 +188,29 @@ def main():
                     elif response:
                         spoken = get_groq_response(
                             f"The user asked: \"{transcript}\"\nResults:\n{response}\n"
-                            "Read these results naturally as Jarvis in 2-3 sentences."
+                            "Read just the place names, addresses, and hours. No intro, no filler. Be concise."
                         ) or response
-                        fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip())
+                        fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip().startswith("•"))
                     else:
                         fallback = "⚠️ Couldn't search nearby places right now."
+                elif intent == "nutrition":
+                    response = fetch_nutrition(transcript)
+                    print(f"Nutrition response: {response}")
+                    if response == "no_food_found":
+                        spoken = get_groq_response(
+                            f"The user asked: \"{transcript}\"\n"
+                            "No nutrition data was found. Tell them in one natural sentence as Jarvis."
+                        ) or "Sorry, I couldn't find nutrition data for that food, sir."
+                        fallback = "🎙️ " + spoken
+                    elif response:
+                        spoken = get_groq_response(
+                            f"The user asked: \"{transcript}\"\n"
+                            f"USDA nutrition data: {response}\n"
+                            "Answer their specific question using only this data. One concise sentence as Jarvis."
+                        ) or response
+                        fallback = "🎙️ " + spoken
+                    else:
+                        fallback = "⚠️ Couldn't reach the USDA nutrition database right now."
                 else:
                     # General question — call Groq as Jarvis and reply as audio
                     print("General audio query — calling Groq.")

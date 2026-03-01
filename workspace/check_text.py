@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
-    classify_intent, fetch_weather, fetch_time, fetch_nearby,
+    classify_intent, fetch_weather, fetch_time, fetch_nearby, fetch_nutrition,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
     parse_reminder_groq, save_reminder,
     get_groq_response, send_whatsapp, send_whatsapp_audio,
@@ -169,17 +169,30 @@ def main():
             ) or "No matching places found nearby, sir."
             parts.append(answer)
         elif resp:
-            intro = get_groq_response(
-                f"The user asked: \"{clean}\"\n"
-                "Introduce these nearby results in one short sentence as Jarvis (e.g. 'Here are some options near you, sir:')."
-            )
-            if intro:
-                parts.append(intro)
             for line in resp.split("\n"):
-                if line.strip():
+                if line.strip().startswith("•"):
                     parts.append(line.strip())
         else:
             parts.append("⚠️ Couldn't search nearby places right now.")
+
+    elif intent == "nutrition":
+        resp = fetch_nutrition(clean)
+        print(f"Nutrition: {resp}")
+        if resp == "no_food_found":
+            answer = get_groq_response(
+                f"The user asked: \"{clean}\"\n"
+                "No nutrition data was found for that food. Tell them in one natural sentence as Jarvis."
+            ) or "Sorry, I couldn't find nutrition data for that food, sir."
+            parts.append(answer)
+        elif resp:
+            answer = get_groq_response(
+                f"The user asked: \"{clean}\"\n"
+                f"USDA nutrition data: {resp}\n"
+                "Answer their specific question using only this data. One concise sentence as Jarvis."
+            ) or resp
+            parts.append(answer)
+        else:
+            parts.append("⚠️ Couldn't reach the USDA nutrition database right now.")
 
     if not parts:
         if audio:

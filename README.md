@@ -16,7 +16,8 @@ Send a WhatsApp message (text or voice) to your OpenClaw number. Groq classifies
 | Calendar find | "what's on my calendar today?" | Zapier Google Calendar Find |
 | Calendar create | "lunch with John tomorrow at noon" | Zapier Google Calendar Quick Add |
 | Reminder | "remind me to call mom at 8pm" | saved locally, fires at that time |
-| Nearby | "find me a good Italian restaurant" / "any pharmacies close by?" | Overpass API (OpenStreetMap) → up to 5 results with distance |
+| Nearby | "find me a good Italian restaurant" / "any pharmacies close by?" | Overpass API (OpenStreetMap) → up to 3 results with distance |
+| Nutrition | "how many calories in a banana?" / "macros in chicken breast" | USDA FoodData Central → Groq answer |
 | General | anything else | Groq llama-3.3-70b as Jarvis |
 
 See `workspace/DIAGRAM.txt` for the full architecture.
@@ -89,6 +90,7 @@ This fires any reminders whose time has passed.
 | `GROQ_API_KEY` | Yes | From [console.groq.com](https://console.groq.com) |
 | `DEFAULT_LOCATION` | No | ZIP code or city for weather/time default (e.g. `10001`) |
 | `DEFAULT_LOCATION_NAME` | No | Human-readable city name for that default (e.g. `New York`) |
+| `USDA_API_KEY` | No | From [fdc.nal.usda.gov](https://fdc.nal.usda.gov/api-key-signup) — free, needed for nutrition lookups |
 
 ---
 
