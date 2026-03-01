@@ -195,8 +195,8 @@ def main():
             answer = get_groq_response(
                 f"The user asked: \"{clean}\"\nMovie data from TMDB:\n{resp}\n"
                 "Answer their specific question directly. No caveats, no explanation. "
-                "If they used a singular word (last, latest, recent movie), reply ONLY with the title and year, e.g. 'Here (2024), sir.' Nothing else. "
-                "If they used a plural word (recent movies, films, filmography), list only titles and years, one per line."
+                "If they used a singular word (last, latest, recent movie), reply with the title, year, and financial info if available. e.g. 'Dunki (2023) — Budget: $72M · Box office: $100M' or just 'Here (2024)' if no financial data. "
+                "If they used a plural word (recent movies, films, filmography), list each movie with its financial info if available, one per line."
             ) or resp
             parts.append(answer)
         elif resp:

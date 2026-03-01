@@ -213,8 +213,8 @@ def main():
                         spoken = get_groq_response(
                             f"The user asked: \"{transcript}\"\nMovie data from TMDB:\n{response}\n"
                             "Answer their specific question directly. No caveats, no explanation. "
-                            "If they used a singular word (last, latest, recent movie), say ONLY the title and year, e.g. 'Here, 2024, sir.' Nothing else. "
-                            "If they used a plural word (recent movies, films, filmography), read only the titles and years."
+                            "If they used a singular word (last, latest, recent movie), say the title, year, and financial info if available. e.g. 'Dunki, 2023, budget 72 million, box office 100 million'. Skip financial figures if not available. "
+                            "If they used a plural word (recent movies, films, filmography), read each title with financial info if available."
                         ) or response
                         fallback = response
                     elif response:

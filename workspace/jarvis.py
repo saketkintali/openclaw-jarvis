@@ -1067,7 +1067,7 @@ def fetch_movies_tmdb(query):
         "model": "llama-3.1-8b-instant",
         "messages": [
             {"role": "system", "content":
-                "Extract the person's name from the movie query. Reply ONLY with valid JSON.\n"
+                "Extract the person's name from the movie query and normalize it to the correct full name with proper spelling and spacing (e.g. 'shahrukh khan' → 'Shah Rukh Khan', 'tomhanks' → 'Tom Hanks'). Reply ONLY with valid JSON.\n"
                 "Format: {\"name\": \"Full Name\", \"role\": \"actor\" or \"director\"}\n"
                 "If no person name found, return {\"name\": null, \"role\": null}"},
             {"role": "user", "content": query},
@@ -1099,17 +1099,7 @@ def fetch_movies_tmdb(query):
         role = (parsed.get("role") or "actor").lower()
         print(f"TMDB extracted: name={person_name}, role={role}")
     except Exception as e:
-        print(f"TMDB name extract error: {e} — using text fallback")
-
-    # Fallback: strip common movie query words to get just the name
-    if not person_name:
-        import re as _re
-        person_name = _re.sub(
-            r'\b(last|latest|recent|movies?|films?|of|by|from|starring|directed\s+by|filmography|new|what|was|is|the|a)\b',
-            '', query, flags=_re.IGNORECASE
-        )
-        person_name = ' '.join(person_name.split()).strip() or None
-        print(f"TMDB fallback name: {person_name}")
+        print(f"TMDB name extract error: {e}")
 
     if not person_name:
         return None
@@ -1123,9 +1113,15 @@ def fetch_movies_tmdb(query):
         results = _json.loads(urllib.request.urlopen(search_url, timeout=8).read())
         if not results.get("results"):
             return f"Couldn't find anyone named '{person_name}' on TMDB."
-        person = results["results"][0]
+        candidates = results["results"][:5]
+        # Filter by department first (actor → Acting, director → Directing), then pick most popular
+        dept = "Directing" if role == "director" else "Acting"
+        dept_matches = [p for p in candidates if p.get("known_for_department") == dept]
+        pool = dept_matches if dept_matches else candidates
+        person = max(pool, key=lambda p: p.get("popularity", 0))
         person_id = person["id"]
         person_name_official = person["name"]
+        print(f"TMDB person: {person_name_official} (dept={person.get('known_for_department')}, popularity={person.get('popularity')})")
     except Exception as e:
         print(f"TMDB search error: {e}")
         return None
@@ -1142,20 +1138,26 @@ def fetch_movies_tmdb(query):
         return None
 
     today = _dt.date.today().isoformat()
+
+    def _is_real_movie(m):
+        """Exclude interview specials, documentaries, TV shorts.
+        Cast entries have vote_count; crew entries often don't — use popularity as fallback."""
+        if not (m.get("release_date") and m["release_date"] <= today):
+            return False
+        if "vote_count" in m:
+            return m["vote_count"] >= 10
+        return m.get("popularity", 0) > 1
+
     if role == "director":
         movies = [m for m in credits.get("crew", [])
-                  if m.get("job") == "Director" and m.get("release_date") and m["release_date"] <= today]
-        # If no director credits, person is likely an actor — fall back to cast
+                  if m.get("job") == "Director" and _is_real_movie(m)]
         if not movies:
-            movies = [m for m in credits.get("cast", [])
-                      if m.get("release_date") and m["release_date"] <= today]
+            movies = [m for m in credits.get("cast", []) if _is_real_movie(m)]
     else:
-        movies = [m for m in credits.get("cast", [])
-                  if m.get("release_date") and m["release_date"] <= today]
-        # If no cast credits, try director credits as fallback
+        movies = [m for m in credits.get("cast", []) if _is_real_movie(m)]
         if not movies:
             movies = [m for m in credits.get("crew", [])
-                      if m.get("job") == "Director" and m.get("release_date") and m["release_date"] <= today]
+                      if m.get("job") == "Director" and _is_real_movie(m)]
     movies.sort(key=lambda m: m["release_date"], reverse=True)
     movies = movies[:5]
 
