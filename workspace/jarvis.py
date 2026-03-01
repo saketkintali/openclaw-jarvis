@@ -1084,15 +1084,32 @@ def fetch_movies_tmdb(query):
             "User-Agent": "Mozilla/5.0",
         },
     )
+    person_name = None
+    role = "actor"
     try:
         resp = urllib.request.urlopen(req, timeout=10)
         raw = _json.loads(resp.read())["choices"][0]["message"]["content"].strip()
+        # Strip markdown code fences if Groq wrapped the JSON
+        if "```" in raw:
+            import re as _re
+            m = _re.search(r'\{.*?\}', raw, _re.DOTALL)
+            raw = m.group(0) if m else raw
         parsed = _json.loads(raw)
         person_name = parsed.get("name")
         role = (parsed.get("role") or "actor").lower()
+        print(f"TMDB extracted: name={person_name}, role={role}")
     except Exception as e:
-        print(f"TMDB name extract error: {e}")
-        return None
+        print(f"TMDB name extract error: {e} — using text fallback")
+
+    # Fallback: strip common movie query words to get just the name
+    if not person_name:
+        import re as _re
+        person_name = _re.sub(
+            r'\b(last|latest|recent|movies?|films?|of|by|from|starring|directed\s+by|filmography|new|what|was|is|the|a)\b',
+            '', query, flags=_re.IGNORECASE
+        )
+        person_name = ' '.join(person_name.split()).strip() or None
+        print(f"TMDB fallback name: {person_name}")
 
     if not person_name:
         return None
