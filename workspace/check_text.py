@@ -192,7 +192,9 @@ def main():
         resp = fetch_movies_tmdb(clean)
         print(f"Movies: {resp}")
         if resp:
-            parts.append(resp)
+            for line in resp.split("\n"):
+                if line.strip():
+                    parts.append(line.strip())
         else:
             parts.append("⚠️ Couldn't find movie info right now.")
 
