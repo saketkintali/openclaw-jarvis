@@ -1,0 +1,190 @@
+     ╔══════════════════════════════════════════════════════════════════════════╗
+     ║                        YOUR WHATSAPP (Saket)                            ║
+     ╚══════════════════════════════╤═══════════════════════════════════════════╝
+                                    │
+                         ┌──────────▼──────────┐
+                         │   Twilio Webhook     │  cloud.twilio.com
+                         │   HTTP POST to       │  routes WA messages
+                         │   your server        │  to your code
+                         └──────────┬──────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+              Voice (OGG)                       Text message
+                    │                               │
+                    ▼                               ▼
+         ┌─────────────────────┐       ┌─────────────────────┐
+         │   check_audio.py    │       │   check_text.py      │
+         │                     │       │                      │
+         │  transcribe_audio() │       │  reads message body  │
+         │       calls         │       │  cleans + lowercases │
+         │   transcribe.py     │       │  → clean variable    │
+         │  (faster-whisper    │       └──────────┬──────────┘
+         │   tiny model, CPU)  │                  │
+         │  → transcript str   │                  │
+         └──────────┬──────────┘                  │
+                    └──────────────┬──────────────┘
+                                   │ transcript / clean
+                                   ▼
+╔══════════════════════════════════════════════════════════════════════════╗
+║                         INTENT ROUTER                                   ║
+║          classify_intent() — Groq llama-3.1-8b-instant                  ║
+║          (temperature=0, max_tokens=50, direct to api.groq.com)         ║
+║          returns JSON: {"intent": "...", "location": "City or null"}    ║
+║          location=null → use DEFAULT_LOCATION for weather/time          ║
+║                                                                         ║
+║  "reminder"        →  setting or asking about a reminder                ║
+║  "weather"         →  weather, jacket, outdoor activity, going out now  ║
+║  "time"            →  current time in a specific location               ║
+║  "email"           →  checking or reading inbox / gmail                 ║
+║  "calendar_find"   →  what's on schedule, meetings, availability        ║
+║  "calendar_create" →  add / book / create a new calendar event          ║
+║  "nearby"          →  find places nearby (restaurants, pharmacies)      ║
+║  "nutrition"       →  calories, macros, food data                        ║
+║  "general"         →  anything else                                     ║
+║                                                                         ║
+║  ⚠ Groq fails → _keyword_fallback() (original is_X_question() chain)   ║
+╚═╤════╤══════╤════╤═════════╤══════════╤═════════════╤══════════╤════════╝
+  │    │      │    │         │          │             │          │
+  ▼    ▼      ▼    ▼         ▼          ▼             ▼          ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ REMINDER   WEATHER    TIME      EMAIL     CAL FIND  CAL CREATE  GENERAL               │
+│                                                                                        │
+│ parse_     location   location  build     build     build       NL instruct query      │
+│ reminder_  from       from      instr +   instr +   instr +     to Zapier:  to         │
+│ groq()     classify_  classify_ query +   date      date        "do not     Groq 70b   │
+│ (8b,       intent()   intent()  date ctx  window    window      ask follow- direct     │
+│  temp=0,   │          │         │         (SOD/EOD  (natural    ups, delete            │
+│  JSON)     ▼          ▼         ▼         from      language    now"                   │
+│            fetch_     fetch_    fetch_    query)    query)      │                      │
+│ ▼          weather()  world-    gmail_    │          │          if followUp:           │
+│ save to    open-meteo time      zapier()  fetch_    create_     auto-find →            │
+│ remind.    REST API   REST API  │         cal_      cal_event_  parse title            │
+│ json       curr +     │         each      zapier()  zapier()    + time →              │
+│            hourly     │         line as   Zapier    Zapier MCP  retry delete           │
+│ ▼          precip.    │         own       MCP       (HTTP SSE)  │                      │
+│ Groq 70b   │          │         bubble    (HTTP     Quick Add   ▼                      │
+│ confirms   ▼          │         ──────    SSE)      Event tool  delete_cal_            │
+│ "saved,    Groq 70b   │         no Groq   gcal_     NL→Google   event_                 │
+│  sir"      answers    │         filter    find_     │           zapier()               │
+│            specific   │         ──────    events    │           Zapier MCP             │
+│            question   │         sent as   tool      │           (HTTP SSE)             │
+│            ("jacket?" │         bubbles   │          │           │                      │
+│             "cold?")  │                   ▼          │           │                      │
+│                       │                   Groq 70b  └───────────┘                      │
+│                       │                   answers    Groq 70b confirms action           │
+│                       └───────────────────┘                                            │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+         │                    │                    │
+         │ Groq 70b called    │ raw string         │ split bubbles
+         │ inside handler     │ (no Groq)          │ (no Groq)
+         │ (weather/cal/      │                    │
+         │  reminder/general) │                    │
+         └────────────────────┴────────────────────┘
+                              │ final response
+                              ▼
+              ┌───────────────┴──────────────┐
+         Voice input?                    Text input?
+              │                               │
+              ▼                               ▼
+       edge-tts (local)              plain text / bubbles
+       text → OGG audio              sent via openclaw.cmd
+              │                               │
+              └───────────────┬───────────────┘
+                              │
+                   ┌──────────▼──────────┐
+                   │   Twilio sends      │
+                   │   reply back        │
+                   └──────────┬──────────┘
+                              │
+╔═════════════════════════════▼════════════════════════════════════════╗
+║            YOUR WHATSAPP — audio reply or text reply                ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  GROQ USAGE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  classify_intent()     llama-3.1-8b-instant  temp=0  max_tokens=50
+                        → returns JSON {intent, location}
+                        → routing + location extraction in one call
+                        → location=null uses DEFAULT_LOCATION
+
+  get_groq_response()   llama-3.3-70b-versatile  temp=0.7  max_tokens=150
+                        → called from within each handler (not a pipeline step)
+                        → prompt = "User asked: [query]. Data: [raw]. Answer
+                          their specific question in one sentence as Jarvis."
+                        → TIME and EMAIL bypass this — raw data sent directly
+
+  groq_proxy :11435     NOT a Groq proxy — returns empty "" to every request
+                        → silences the OpenClaw main agent so it doesn't send
+                          its own reply to WhatsApp on top of ours
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BACKGROUND HEARTBEAT  (Windows Task Scheduler, every ~30 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  heartbeat.py runs
+        │
+        └─► check_due_reminders()
+              reads reminders.json
+              for each reminder where remind_at ≤ now:
+                → send_whatsapp("⏰ Reminder: [task]")
+                → remove from reminders.json
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KEY FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  jarvis.py           ← shared module: all constants, fetch functions, Groq, Zapier MCP, TTS
+  check_audio.py      ← thin voice pipeline: lock, state, transcribe, main()
+  check_text.py       ← thin text pipeline: strip_name_prefix, wants_audio, main()
+  heartbeat.py        ← fires due reminders (Windows Task Scheduler, every ~30 min)
+  transcribe.py       ← faster-whisper wrapper (called as subprocess)
+  groq_proxy.py       ← OpenClaw silencer on :11435, returns empty response
+  config/mcporter.json← Zapier MCP endpoint URL + auth token
+  reminders.json      ← active reminders [{task, remind_at, id}]
+  audio_state.json    ← tracks which OGG files already processed
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NEARBY HANDLER  (Overpass API / OpenStreetMap)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "find me a good Italian restaurant" / "any pharmacies close by?"
+        │
+        ▼
+  classify_intent()  →  intent="nearby", location="City or null"
+        │
+        ▼
+  fetch_nearby(query, location)
+    │  Groq 8b extracts: amenity type + cuisine (if any)
+    │  geocode() → lat/lon via open-meteo geocoding
+    │  Overpass API query:
+    │    node[amenity=X][cuisine=Y](around:5000,lat,lon)
+    │    → up to 3 results with name, address, distance, hours
+    │  _format_osm_hours() converts "Mo-Fr 09:00-21:00" → "Mon–Fri 9am–9pm"
+        │
+        ▼
+  sent as bullet-point bubbles (no Groq summary)
+  "• Name  Address  0.4 km  Mon–Fri 9am–9pm"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NUTRITION HANDLER  (Groq — no external API)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "how many calories in a banana?" / "macros in 130g chicken breast"
+        │
+        ▼
+  classify_intent()  →  intent="nutrition"
+        │
+        ▼
+  get_groq_response() — llama-3.3-70b-versatile
+    prompt: "Give specific numbers for calories, protein, fat, carbs.
+             If multiple foods, per-item breakdown then total."
+        │
+        ▼
+  sent as text bubble (text) or spoken reply (audio, names only)
