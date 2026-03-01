@@ -316,6 +316,61 @@ def fetch_time(location=None):
         return None
 
 # ── Nearby places (Overpass / OpenStreetMap) ─────────────────────────────────
+_DAY_MAP = {"Mo": "Mon", "Tu": "Tue", "We": "Wed", "Th": "Thu",
+            "Fr": "Fri", "Sa": "Sat", "Su": "Sun", "PH": "Holidays"}
+
+def _fmt_time(t):
+    """'09:00' → '9am', '21:30' → '9:30pm', '00:00' → '12am'"""
+    try:
+        h, m = int(t[:2]), int(t[3:5])
+        if h == 0:    base = "12am"
+        elif h < 12:  base = f"{h}am"
+        elif h == 12: base = "12pm"
+        else:         base = f"{h - 12}pm"
+        return base if m == 0 else base[:-2] + f":{m:02d}" + base[-2:]
+    except Exception:
+        return t
+
+def _fmt_days(d):
+    """'Mo-Fr' → 'Mon–Fri', 'Sa' → 'Sat'"""
+    if "-" in d:
+        a, b = d.split("-", 1)
+        return f"{_DAY_MAP.get(a, a)}–{_DAY_MAP.get(b, b)}"
+    return _DAY_MAP.get(d, d)
+
+def _format_osm_hours(raw):
+    """Convert OSM opening_hours to readable form.
+    'Mo-Fr 09:00-21:00; Sa-Su 10:00-18:00' → 'Mon–Fri 9am–9pm, Sat–Sun 10am–6pm'
+    """
+    if not raw:
+        return ""
+    if raw.strip() == "24/7":
+        return "Open 24/7"
+    try:
+        parts = []
+        for segment in raw.split(";"):
+            segment = segment.strip()
+            if not segment:
+                continue
+            tokens = segment.split(None, 1)
+            if len(tokens) == 2:
+                days = _fmt_days(tokens[0])
+                spans = []
+                for span in tokens[1].split(","):
+                    span = span.strip()
+                    if "-" in span:
+                        t1, t2 = span.split("-", 1)
+                        spans.append(f"{_fmt_time(t1.strip())}–{_fmt_time(t2.strip())}")
+                    else:
+                        spans.append(span)
+                parts.append(f"{days} {', '.join(spans)}")
+            else:
+                parts.append(segment)
+        return "; ".join(parts) if parts else raw
+    except Exception:
+        return raw
+
+
 def fetch_nearby(user_query, location=None):
     """Find nearby places using Overpass API (OpenStreetMap).
     Returns formatted string of results, 'no_places_found', or None on error.
@@ -417,7 +472,7 @@ def fetch_nearby(user_query, location=None):
         if addr:
             detail.append(addr)
         if tags.get("opening_hours"):
-            detail.append(tags["opening_hours"])
+            detail.append(_format_osm_hours(tags["opening_hours"]))
         if dist:
             detail.append(dist)
         line = f"• {name}"
