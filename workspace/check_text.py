@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
-    classify_intent, fetch_weather, fetch_time, fetch_nearby, fetch_nutrition,
+    classify_intent, fetch_weather, fetch_time, fetch_nearby,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
     parse_reminder_groq, save_reminder,
     get_groq_response, send_whatsapp, send_whatsapp_audio,
@@ -176,20 +176,16 @@ def main():
             parts.append("⚠️ Couldn't search nearby places right now.")
 
     elif intent == "nutrition":
-        resp = fetch_nutrition(clean)
-        print(f"Nutrition: {resp}")
-        if resp == "no_food_found":
-            answer = get_groq_response(
-                f"The user asked: \"{clean}\"\n"
-                "No nutrition data was found for that food. Tell them in one natural sentence as Jarvis."
-            ) or "Sorry, I couldn't find nutrition data for that food, sir."
+        answer = get_groq_response(
+            f"Nutrition question: {clean}\n"
+            "Give specific numbers for calories, protein, fat, and carbs. "
+            "If multiple foods are mentioned, give a per-item breakdown then a total. Be concise."
+        )
+        if answer:
             parts.append(answer)
-        elif resp:
-            for line in resp.split("\n"):
-                if line.strip():
-                    parts.append(line.strip())
         else:
-            parts.append("⚠️ Couldn't reach the USDA nutrition database right now.")
+            parts.append("⚠️ Couldn't get nutrition info right now.")
+        print(f"Nutrition: {answer}")
 
     if not parts:
         if audio:

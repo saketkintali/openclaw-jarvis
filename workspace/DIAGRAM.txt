@@ -39,7 +39,7 @@
 ║  "calendar_find"   →  what's on schedule, meetings, availability        ║
 ║  "calendar_create" →  add / book / create a new calendar event          ║
 ║  "nearby"          →  find places nearby (restaurants, pharmacies)      ║
-║  "nutrition"       →  calories, macros, food data (USDA FoodData)       ║
+║  "nutrition"       →  calories, macros, food data                        ║
 ║  "general"         →  anything else                                     ║
 ║                                                                         ║
 ║  ⚠ Groq fails → _keyword_fallback() (original is_X_question() chain)   ║
@@ -173,26 +173,18 @@
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  NUTRITION HANDLER  (USDA FoodData Central)
+  NUTRITION HANDLER  (Groq — no external API)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  "calories in 8 tuna rolls and 130g yogurt with 100g blueberries"
+  "how many calories in a banana?" / "macros in 130g chicken breast"
         │
         ▼
   classify_intent()  →  intent="nutrition"
         │
         ▼
-  fetch_nutrition(query)
-    │  Groq 8b parses query → [{food, quantity, unit, approx_grams}]
-    │  For each item:
-    │    USDA REST API: /foods/search?query=X&dataType=Foundation,SR Legacy
-    │    → per-100g nutrient data, scaled by requested quantity
-    │    Calories: use nutrient "208" if present;
-    │              fallback = protein×4 + fat×9 + carbs×4 (Atwater)
-    │  Accumulates: total_cal, total_protein, total_fat, total_carbs
+  get_groq_response() — llama-3.3-70b-versatile
+    prompt: "Give specific numbers for calories, protein, fat, carbs.
+             If multiple foods, per-item breakdown then total."
         │
         ▼
-  sent as per-item bubbles + Total line (no Groq)
-  "• 8pieces (~240g) Tuna: 449kcal, Protein: 38g, Fat: 22g, Carbs: 23g"
-  "• 130g Yogurt: 45kcal, Protein: 5.5g, Fat: 0.1g, Carbs: 10.5g"
-  "Total: 551kcal | Protein: 44.2g | Fat: 22.6g | Carbs: 47.7g"
+  sent as text bubble (text) or spoken reply (audio, names only)
