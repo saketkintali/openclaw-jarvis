@@ -212,8 +212,9 @@ def main():
                     if response:
                         spoken = get_groq_response(
                             f"The user asked: \"{transcript}\"\nMovie data from TMDB:\n{response}\n"
-                            "Answer their specific question directly. If they asked for the last or latest movie, "
-                            "say only that one title and year. If they asked for recent or multiple, read them. "
+                            "Answer their specific question directly. "
+                            "If they used a singular word (last, latest, recent movie), say only the single most recent title and year. "
+                            "If they used a plural word (recent movies, films, filmography), read them. "
                             "No intro, no header."
                         ) or response
                         fallback = response

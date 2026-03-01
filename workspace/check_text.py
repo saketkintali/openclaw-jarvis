@@ -194,8 +194,9 @@ def main():
         if resp:
             answer = get_groq_response(
                 f"The user asked: \"{clean}\"\nMovie data from TMDB:\n{resp}\n"
-                "Answer their specific question directly. If they asked for the last or latest movie, "
-                "give only that one title and year. If they asked for recent or multiple, list them. "
+                "Answer their specific question directly. "
+                "If they used a singular word (last, latest, recent movie), give only the single most recent title and year. "
+                "If they used a plural word (recent movies, films, filmography), list them. "
                 "Never use a header or repeat their question."
             ) or resp
             parts.append(answer)
