@@ -185,12 +185,9 @@ def main():
             ) or "Sorry, I couldn't find nutrition data for that food, sir."
             parts.append(answer)
         elif resp:
-            answer = get_groq_response(
-                f"The user asked: \"{clean}\"\n"
-                f"USDA nutrition data: {resp}\n"
-                "Answer their specific question using only this data. One concise sentence as Jarvis."
-            ) or resp
-            parts.append(answer)
+            for line in resp.split("\n"):
+                if line.strip():
+                    parts.append(line.strip())
         else:
             parts.append("⚠️ Couldn't reach the USDA nutrition database right now.")
 

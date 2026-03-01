@@ -205,10 +205,10 @@ def main():
                     elif response:
                         spoken = get_groq_response(
                             f"The user asked: \"{transcript}\"\n"
-                            f"USDA nutrition data: {response}\n"
-                            "Answer their specific question using only this data. One concise sentence as Jarvis."
+                            f"USDA nutrition data:\n{response}\n"
+                            "Read each item's calories. No intro. Be concise."
                         ) or response
-                        fallback = "🎙️ " + spoken
+                        fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip())
                     else:
                         fallback = "⚠️ Couldn't reach the USDA nutrition database right now."
                 else:
