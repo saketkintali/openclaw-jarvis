@@ -15,7 +15,6 @@ Send a WhatsApp message (text or voice) to your OpenClaw number. Jarvis routes i
 | Email | "any emails today?" / "read my last email" | Zapier Gmail Find |
 | Calendar find | "what's on my calendar today?" | Zapier Google Calendar Find |
 | Calendar create | "lunch with John tomorrow at noon" | Zapier Google Calendar Quick Add |
-| Calendar delete | "delete breakfast tomorrow" | Zapier Google Calendar Delete |
 | Reminder | "remind me to call mom at 8pm" | saved locally, fires at that time |
 | General | anything else | Groq llama-3.3-70b as Jarvis |
 

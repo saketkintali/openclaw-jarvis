@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from check_audio import (
     classify_intent, fetch_weather, fetch_time, fetch_amazon_emails,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
-    delete_calendar_event_zapier, parse_reminder_groq, save_reminder,
+    parse_reminder_groq, save_reminder,
     get_groq_response, send_whatsapp, WHATSAPP_TARGET, get_ai_response
 )
 
@@ -181,23 +181,6 @@ def main():
                 if line:
                     parts.append(line)
         print(f"Email: {resp}")
-
-    elif intent == "calendar_delete":
-        resp = delete_calendar_event_zapier(clean)
-        if resp:
-            spoken_resp = get_groq_response(
-                f"The user asked: \"{clean}\"\nResult: {resp}\n"
-                "Confirm the event was deleted in one natural sentence."
-            ) or resp
-            parts.append(spoken_resp)
-        else:
-            not_found = get_groq_response(
-                f"The user asked: \"{clean}\"\n"
-                "The event could not be found in the calendar. "
-                "Say sorry briefly and suggest double-checking the event name or time."
-            ) or "I'm afraid I couldn't locate that event in your calendar, sir."
-            parts.append(not_found)
-        print(f"Calendar delete: {resp}")
 
     elif intent == "calendar_create":
         resp = create_calendar_event_zapier(clean)

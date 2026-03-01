@@ -88,17 +88,6 @@ def is_calendar_create_question(text):
     )
     return has_create and has_context
 
-_CALENDAR_DELETE_KEYWORDS = {
-    "remove", "delete", "cancel", "clear", "drop", "erase"
-}
-
-def is_calendar_delete_question(text):
-    tl = text.lower()
-    words = set(tl.split())
-    return bool(words & _CALENDAR_DELETE_KEYWORDS) and bool(
-        words & _CALENDAR_CREATE_CONTEXT or
-        any(w in tl for w in ("event", "appointment", "meeting", "calendar"))
-    )
 
 def is_reminder_question(text):
     tl = text.lower()
@@ -1069,7 +1058,7 @@ def get_groq_response(user_text):
 
 _INTENT_CATEGORIES = {
     "reminder", "weather", "time", "email",
-    "calendar_find", "calendar_create", "calendar_delete", "general"
+    "calendar_find", "calendar_create", "general"
 }
 
 def _keyword_fallback(text):
@@ -1078,7 +1067,6 @@ def _keyword_fallback(text):
     if is_weather_question(text):         return "weather"
     if is_time_question(text):            return "time"
     if is_email_question(text):           return "email"
-    if is_calendar_delete_question(text): return "calendar_delete"
     if is_calendar_create_question(text): return "calendar_create"
     if is_calendar_question(text):        return "calendar_find"
     return "general"
@@ -1097,7 +1085,6 @@ def classify_intent(text):
         "email — checking, reading, or searching emails or inbox\n"
         "calendar_find — asking about existing events, schedule, meetings, or availability\n"
         "calendar_create — creating, adding, booking, or scheduling a new event\n"
-        "calendar_delete — removing, deleting, or cancelling an existing event\n"
         "general — anything else\n\n"
         "location: the specific city or place explicitly mentioned, or null if none. "
         "Do not infer locations from context (e.g. 'a walk', 'a trip', 'outside' are not locations)."
@@ -1324,22 +1311,6 @@ def main():
                         fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip())
                     else:
                         fallback = f"⚠️ Couldn't check Gmail. You said: {transcript}"
-                elif intent == "calendar_delete":
-                    response = delete_calendar_event_zapier(transcript)
-                    print(f"Calendar delete response: {response}")
-                    if response:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nResult: {response}\n"
-                            "Confirm the event was deleted in one natural sentence."
-                        ) or response
-                        fallback = f"🗑️ {response}"
-                    else:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\n"
-                            "The event could not be found in the calendar. "
-                            "Say sorry briefly and suggest the user double-check the event name or time."
-                        ) or "I'm afraid I couldn't locate that event in your calendar, sir."
-                        fallback = f"⚠️ {spoken}"
                 elif intent == "calendar_create":
                     response = create_calendar_event_zapier(transcript)
                     print(f"Calendar create response: {response}")

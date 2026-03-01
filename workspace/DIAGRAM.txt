@@ -38,7 +38,6 @@
 ║  "email"           →  checking or reading inbox / gmail                 ║
 ║  "calendar_find"   →  what's on schedule, meetings, availability        ║
 ║  "calendar_create" →  add / book / create a new calendar event          ║
-║  "calendar_delete" →  remove / cancel / delete an existing event        ║
 ║  "general"         →  anything else                                     ║
 ║                                                                         ║
 ║  ⚠ Groq fails → _keyword_fallback() (original is_X_question() chain)   ║
@@ -46,7 +45,7 @@
   │    │      │    │         │          │             │          │
   ▼    ▼      ▼    ▼         ▼          ▼             ▼          ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ REMINDER   WEATHER    TIME      EMAIL     CAL FIND  CAL CREATE  CAL DELETE  GENERAL   │
+│ REMINDER   WEATHER    TIME      EMAIL     CAL FIND  CAL CREATE  GENERAL               │
 │                                                                                        │
 │ parse_     location   location  build     build     build       NL instruct query      │
 │ reminder_  from       from      instr +   instr +   instr +     to Zapier:  to         │
