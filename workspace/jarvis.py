@@ -1154,10 +1154,31 @@ def fetch_movies_tmdb(query):
     if not movies:
         return f"No released movies found for {person_name_official}."
 
+    def _fmt_money(n):
+        if not n:
+            return None
+        if n >= 1_000_000_000:
+            return f"${n / 1_000_000_000:.1f}B"
+        return f"${n / 1_000_000:.0f}M"
+
     lines = [f"Recent movies — {person_name_official}:"]
     for m in movies:
         year = m["release_date"][:4]
-        lines.append(f"• {m['title']} ({year})")
+        try:
+            detail_url = f"https://api.themoviedb.org/3/movie/{m['id']}?api_key={TMDB_API_KEY}"
+            detail = _json.loads(urllib.request.urlopen(detail_url, timeout=5).read())
+            budget  = _fmt_money(detail.get("budget"))
+            revenue = _fmt_money(detail.get("revenue"))
+            extras = []
+            if budget:  extras.append(f"Budget: {budget}")
+            if revenue: extras.append(f"Box office: {revenue}")
+            extra_str = " · ".join(extras)
+            line = f"• {m['title']} ({year})"
+            if extra_str:
+                line += f" — {extra_str}"
+        except Exception:
+            line = f"• {m['title']} ({year})"
+        lines.append(line)
     return "\n".join(lines)
 
 
