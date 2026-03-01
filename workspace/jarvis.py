@@ -199,10 +199,16 @@ def _normalize_city(search):
 def geocode(search):
     """Return the best-matching geocoding result, or None."""
     search = _normalize_city(search)
-    geo_url = (f"https://geocoding-api.open-meteo.com/v1/search"
-               f"?name={urllib.parse.quote(search)}&count=5&language=en&format=json")
-    geo = json.loads(urllib.request.urlopen(geo_url, timeout=8).read())
-    results = geo.get("results")
+
+    def _query(name):
+        url = (f"https://geocoding-api.open-meteo.com/v1/search"
+               f"?name={urllib.parse.quote(name)}&count=5&language=en&format=json")
+        return json.loads(urllib.request.urlopen(url, timeout=8).read()).get("results")
+
+    results = _query(search)
+    # open-meteo doesn't handle "city,state" — strip state and retry
+    if not results and "," in search:
+        results = _query(search.split(",")[0].strip())
     if not results:
         return None
     # Log all candidates so we can debug wrong-city picks
