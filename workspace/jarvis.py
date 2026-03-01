@@ -1067,7 +1067,7 @@ def fetch_movies_tmdb(query):
         "model": "llama-3.1-8b-instant",
         "messages": [
             {"role": "system", "content":
-                "Extract the person's name from the movie query and normalize it to the correct full name with proper spelling and spacing (e.g. 'shahrukh khan' → 'Shah Rukh Khan', 'tomhanks' → 'Tom Hanks'). Reply ONLY with valid JSON.\n"
+                "Extract the person's name from the movie query and normalize it to the correct full name — fix spelling, phonetic errors, and missing spaces (e.g. 'shahrukh khan' → 'Shah Rukh Khan', 'tomhanks' → 'Tom Hanks', 'matt demon' → 'Matt Damon', 'leo decaprio' → 'Leonardo DiCaprio'). Reply ONLY with valid JSON.\n"
                 "Format: {\"name\": \"Full Name\", \"role\": \"actor\" or \"director\"}\n"
                 "If no person name found, return {\"name\": null, \"role\": null}"},
             {"role": "user", "content": query},
