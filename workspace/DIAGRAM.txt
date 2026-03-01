@@ -136,11 +136,12 @@
   KEY FILES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  check_audio.py      ← main voice pipeline + all fetch/handler functions
-  check_text.py       ← text pipeline, imports all functions from above
+  jarvis.py           ← shared module: all constants, fetch functions, Groq, Zapier MCP, TTS
+  check_audio.py      ← thin voice pipeline: lock, state, transcribe, main()
+  check_text.py       ← thin text pipeline: strip_name_prefix, wants_audio, main()
+  check_amazon.py     ← heartbeat: fires due reminders (imports jarvis)
   transcribe.py       ← faster-whisper wrapper (called as subprocess)
   groq_proxy.py       ← OpenClaw silencer on :11435, returns empty response
-  check_amazon.py     ← heartbeat: fires due reminders
   config/mcporter.json← Zapier MCP endpoint URL + auth token
   reminders.json      ← active reminders [{task, remind_at, id}]
   audio_state.json    ← tracks which OGG files already processed

@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 try:
-    from check_audio import check_due_reminders
+    from jarvis import check_due_reminders
     check_due_reminders()
 except Exception as _e:
     print(f"Reminder check error: {_e}")

@@ -1,31 +1,25 @@
 #!/usr/bin/env python3
-"""Handle incoming WhatsApp text messages — bypass LLM for time/weather/email."""
+"""Handle incoming WhatsApp text messages — Groq classifies intent, routes to the right handler."""
 
 import sys
 import os
-import asyncio
-import subprocess
+import re
 from pathlib import Path
 
-# Reuse all logic from check_audio.py
 sys.path.insert(0, str(Path(__file__).parent))
-from check_audio import (
-    classify_intent, fetch_weather, fetch_time, fetch_amazon_emails,
+from jarvis import (
+    classify_intent, fetch_weather, fetch_time,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
     parse_reminder_groq, save_reminder,
-    get_groq_response, send_whatsapp, WHATSAPP_TARGET, get_ai_response
+    get_groq_response, send_whatsapp, send_whatsapp_audio,
+    WHATSAPP_TARGET, get_ai_response,
 )
-
-# Fix stdout for unicode
-if sys.stdout.encoding != 'utf-8':
-    sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', closefd=False)
 
 AUDIO_KEYWORDS = {"audio", "voice", "speak", "spoken", "aloud"}
 
 
 def strip_name_prefix(text):
     """Strip 'Jarvis' or 'jarvis' from the start so keyword detection works."""
-    import re
     return re.sub(r'^[Jj]arvis[,\s]+', '', text).strip()
 
 def wants_audio(text):
@@ -34,7 +28,6 @@ def wants_audio(text):
 
 def jarvis_speak_parts(parts):
     """Convert raw API data strings into natural Jarvis-style spoken sentences."""
-    import re
     sentences = []
     for part in parts:
         # Time: "City, State: H:MM AM (Day, Mon DD) [TZ]"
@@ -59,52 +52,6 @@ def jarvis_speak_parts(parts):
         sentences.append(f"Regarding your request, sir: {part}")
     return " ".join(sentences)
 
-def _mp3_to_ogg(mp3_path, ogg_path):
-    """Convert MP3 to OGG/Opus using PyAV (bundled ffmpeg). WhatsApp plays OGG
-    inline as audio; MP3 is sent as a document download."""
-    import av
-    with av.open(str(mp3_path)) as inp:
-        with av.open(str(ogg_path), "w", format="ogg") as out:
-            out_stream = out.add_stream("libopus", rate=24000)
-            out_stream.layout = "mono"
-            for frame in inp.decode(audio=0):
-                frame.pts = None
-                for packet in out_stream.encode(frame):
-                    out.mux(packet)
-            for packet in out_stream.encode(None):
-                out.mux(packet)
-
-def send_whatsapp_audio(text_to_speak):
-    """Generate TTS audio via edge-tts, convert to OGG, send as WhatsApp audio."""
-    import edge_tts
-    pid = os.getpid()
-    mp3 = Path(__file__).parent / f"tts_tmp_{pid}.mp3"
-    ogg = Path(__file__).parent / f"tts_tmp_{pid}.ogg"
-    try:
-        async def _gen():
-            communicate = edge_tts.Communicate(text_to_speak, "en-GB-RyanNeural")
-            await communicate.save(str(mp3))
-        asyncio.run(_gen())
-        _mp3_to_ogg(mp3, ogg)
-        cmd = [
-            "openclaw.cmd", "message", "send",
-            "--channel", "whatsapp",
-            "--target", WHATSAPP_TARGET,
-            "--media", str(ogg),
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        print(f"Audio send exit={result.returncode}")
-        if result.returncode != 0:
-            print(f"Audio send stderr: {result.stderr.strip()}")
-            print(f"Audio send stdout: {result.stdout.strip()}")
-        return result.returncode == 0
-    except Exception as e:
-        print(f"TTS error: {e}")
-        return False
-    finally:
-        mp3.unlink(missing_ok=True)
-        ogg.unlink(missing_ok=True)
-
 def main():
     if len(sys.argv) < 2:
         sys.exit(0)
@@ -118,7 +65,6 @@ def main():
 
     # Strip audio request phrases before location/keyword detection
     # e.g. "time in prague as audio" → "time in prague"
-    import re
     clean = re.sub(r'\b(as\s+)?(audio|voice|spoken|speak|aloud)\b', '', text, flags=re.IGNORECASE)
     clean = re.sub(r'\s+', ' ', clean).strip()
 
