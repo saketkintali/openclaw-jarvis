@@ -38,6 +38,8 @@
 ║  "email"           →  checking or reading inbox / gmail                 ║
 ║  "calendar_find"   →  what's on schedule, meetings, availability        ║
 ║  "calendar_create" →  add / book / create a new calendar event          ║
+║  "nearby"          →  find places nearby (restaurants, pharmacies)      ║
+║  "nutrition"       →  calories, macros, food data (USDA FoodData)       ║
 ║  "general"         →  anything else                                     ║
 ║                                                                         ║
 ║  ⚠ Groq fails → _keyword_fallback() (original is_X_question() chain)   ║
@@ -145,3 +147,52 @@
   config/mcporter.json← Zapier MCP endpoint URL + auth token
   reminders.json      ← active reminders [{task, remind_at, id}]
   audio_state.json    ← tracks which OGG files already processed
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NEARBY HANDLER  (Overpass API / OpenStreetMap)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "find me a good Italian restaurant" / "any pharmacies close by?"
+        │
+        ▼
+  classify_intent()  →  intent="nearby", location="City or null"
+        │
+        ▼
+  fetch_nearby(query, location)
+    │  Groq 8b extracts: amenity type + cuisine (if any)
+    │  geocode() → lat/lon via open-meteo geocoding
+    │  Overpass API query:
+    │    node[amenity=X][cuisine=Y](around:5000,lat,lon)
+    │    → up to 3 results with name, address, distance, hours
+    │  _format_osm_hours() converts "Mo-Fr 09:00-21:00" → "Mon–Fri 9am–9pm"
+        │
+        ▼
+  sent as bullet-point bubbles (no Groq summary)
+  "• Name  Address  0.4 km  Mon–Fri 9am–9pm"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NUTRITION HANDLER  (USDA FoodData Central)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "calories in 8 tuna rolls and 130g yogurt with 100g blueberries"
+        │
+        ▼
+  classify_intent()  →  intent="nutrition"
+        │
+        ▼
+  fetch_nutrition(query)
+    │  Groq 8b parses query → [{food, quantity, unit, approx_grams}]
+    │  For each item:
+    │    USDA REST API: /foods/search?query=X&dataType=Foundation,SR Legacy
+    │    → per-100g nutrient data, scaled by requested quantity
+    │    Calories: use nutrient "208" if present;
+    │              fallback = protein×4 + fat×9 + carbs×4 (Atwater)
+    │  Accumulates: total_cal, total_protein, total_fat, total_carbs
+        │
+        ▼
+  sent as per-item bubbles + Total line (no Groq)
+  "• 8pieces (~240g) Tuna: 449kcal, Protein: 38g, Fat: 22g, Carbs: 23g"
+  "• 130g Yogurt: 45kcal, Protein: 5.5g, Fat: 0.1g, Carbs: 10.5g"
+  "Total: 551kcal | Protein: 44.2g | Fat: 22.6g | Carbs: 47.7g"

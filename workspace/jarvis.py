@@ -1102,6 +1102,9 @@ def fetch_nutrition(query):
     # 2. Look up each item in USDA and scale to requested quantity
     results = []
     total_cal = 0
+    total_p   = 0.0
+    total_f   = 0.0
+    total_c   = 0.0
 
     for item in items[:4]:
         food_name  = item.get("food", "")
@@ -1134,15 +1137,40 @@ def fetch_nutrition(query):
 
         scale = total_g / 100.0
         parts = []
+
+        prot  = by_num.get("203")
+        fat   = by_num.get("204")
+        carb  = by_num.get("205")
+        fiber = by_num.get("291")
+
+        prot_s  = round(prot  * scale, 1) if prot  is not None else None
+        fat_s   = round(fat   * scale, 1) if fat   is not None else None
+        carb_s  = round(carb  * scale, 1) if carb  is not None else None
+        fiber_s = round(fiber * scale, 1) if fiber is not None else None
+
+        # Prefer USDA "208" energy value; fall back to Atwater calculation
         cal = by_num.get("208")
         if cal is not None:
-            cal_scaled = round(cal * scale)
-            total_cal += cal_scaled
-            parts.append(f"{cal_scaled}kcal")
-        for num, (label, _) in list(_USDA_NUTRIENTS.items())[1:]:
-            val = by_num.get(num)
-            if val is not None:
-                parts.append(f"{label}: {round(val * scale, 1)}g")
+            cal_s = round(cal * scale)
+        elif prot_s is not None or fat_s is not None or carb_s is not None:
+            cal_s = round((prot_s or 0) * 4 + (fat_s or 0) * 9 + (carb_s or 0) * 4)
+        else:
+            cal_s = None
+
+        if cal_s:
+            total_cal += cal_s
+            parts.append(f"{cal_s}kcal")
+        if prot_s is not None:
+            total_p += prot_s
+            parts.append(f"Protein: {prot_s}g")
+        if fat_s is not None:
+            total_f += fat_s
+            parts.append(f"Fat: {fat_s}g")
+        if carb_s is not None:
+            total_c += carb_s
+            parts.append(f"Carbs: {carb_s}g")
+        if fiber_s is not None:
+            parts.append(f"Fiber: {fiber_s}g")
 
         qty_str = f"{int(quantity) if quantity == int(quantity) else quantity}{unit}"
         if unit not in ("g", "ml", "grams"):
@@ -1154,7 +1182,11 @@ def fetch_nutrition(query):
 
     output = "\n".join(results)
     if len(results) > 1:
-        output += f"\nTotal: {total_cal}kcal"
+        total_parts = [f"{total_cal}kcal"]
+        if total_p > 0: total_parts.append(f"Protein: {round(total_p, 1)}g")
+        if total_f > 0: total_parts.append(f"Fat: {round(total_f, 1)}g")
+        if total_c > 0: total_parts.append(f"Carbs: {round(total_c, 1)}g")
+        output += f"\nTotal: {' | '.join(total_parts)}"
     return output
 
 

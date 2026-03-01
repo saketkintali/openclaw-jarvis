@@ -1,6 +1,6 @@
 # OpenClaw Jarvis
 
-A WhatsApp AI assistant (Jarvis) that runs on [OpenClaw](https://openclaw.ai), using Groq for fast LLM responses, Zapier for Gmail and Google Calendar, and local speech-to-text for voice messages.
+A personal WhatsApp AI assistant (Jarvis) that runs on [OpenClaw](https://openclaw.ai). Talk to it by text or voice and it handles your day — checking weather and time worldwide, reading Gmail, managing Google Calendar, finding places nearby, looking up nutrition data, setting reminders, and answering general questions. Uses Groq for fast LLM responses, Zapier for Gmail and Google Calendar, OpenStreetMap for nearby search, USDA for food data, and local speech-to-text for voice messages.
 
 ---
 
