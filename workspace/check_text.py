@@ -10,7 +10,7 @@ from pathlib import Path
 # Reuse all logic from check_audio.py
 sys.path.insert(0, str(Path(__file__).parent))
 from check_audio import (
-    classify_intent, extract_location, fetch_weather, fetch_time, fetch_amazon_emails,
+    classify_intent, fetch_weather, fetch_time, fetch_amazon_emails,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
     delete_calendar_event_zapier, parse_reminder_groq, save_reminder,
     get_groq_response, send_whatsapp, WHATSAPP_TARGET, get_ai_response
@@ -122,11 +122,9 @@ def main():
     clean = re.sub(r'\b(as\s+)?(audio|voice|spoken|speak|aloud)\b', '', text, flags=re.IGNORECASE)
     clean = re.sub(r'\s+', ' ', clean).strip()
 
-    # Extract location once — shared across time + weather in the same message
-    location = extract_location(clean)
     parts = []
 
-    intent = classify_intent(clean)
+    intent, location = classify_intent(clean)
     print(f"Intent: {intent}")
 
     if intent == "reminder":

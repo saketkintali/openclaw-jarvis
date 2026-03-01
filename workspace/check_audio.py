@@ -1084,18 +1084,23 @@ def _keyword_fallback(text):
     return "general"
 
 def classify_intent(text):
-    """Classify user intent via Groq (llama-3.1-8b-instant, temp=0). Falls back to keyword matching."""
+    """Classify user intent and extract location via Groq (llama-3.1-8b-instant, temp=0).
+    Returns (intent, location) where location is a city/place string or None."""
     import urllib.request, urllib.error, json as _json
     system = (
-        "Classify the message into exactly one category. Reply with ONLY the category name, nothing else.\n\n"
+        "Classify the message and extract the location. Reply with ONLY valid JSON, no other text.\n"
+        "Format: {\"intent\": \"category\", \"location\": \"City Name or null\"}\n\n"
+        "intent must be exactly one of:\n"
         "reminder — setting or asking about a reminder\n"
-        "weather — weather, temperature, rain, umbrella, jacket, outdoor conditions, should I bring a jacket/umbrella, will it rain, is it cold, what to wear outside\n"
+        "weather — weather, temperature, rain, umbrella, jacket, outdoor conditions, what to wear outside, going out/outside now, heading out, leaving now, any message implying the user is about to be outdoors and would benefit from weather context\n"
         "time — current time in a specific location\n"
         "email — checking, reading, or searching emails or inbox\n"
         "calendar_find — asking about existing events, schedule, meetings, or availability\n"
         "calendar_create — creating, adding, booking, or scheduling a new event\n"
         "calendar_delete — removing, deleting, or cancelling an existing event\n"
-        "general — anything else"
+        "general — anything else\n\n"
+        "location: the specific city or place explicitly mentioned, or null if none. "
+        "Do not infer locations from context (e.g. 'a walk', 'a trip', 'outside' are not locations)."
     )
     payload = _json.dumps({
         "model": "llama-3.1-8b-instant",
@@ -1103,7 +1108,7 @@ def classify_intent(text):
             {"role": "system", "content": system},
             {"role": "user",   "content": text},
         ],
-        "max_tokens": 10,
+        "max_tokens": 50,
         "temperature": 0,
     }).encode("utf-8")
     req = urllib.request.Request(
@@ -1117,12 +1122,19 @@ def classify_intent(text):
     )
     try:
         resp = urllib.request.urlopen(req, timeout=10)
-        label = _json.loads(resp.read())["choices"][0]["message"]["content"].strip().lower()
-        print(f"classify_intent: '{text[:60]}' → {label}")
-        return label if label in _INTENT_CATEGORIES else _keyword_fallback(text)
+        raw = _json.loads(resp.read())["choices"][0]["message"]["content"].strip()
+        parsed = _json.loads(raw)
+        intent = parsed.get("intent", "").strip().lower()
+        location = parsed.get("location") or None
+        if location:
+            location = str(location).strip()
+        if intent not in _INTENT_CATEGORIES:
+            intent = _keyword_fallback(text)
+        print(f"classify_intent: '{text[:60]}' → {intent}, location={location}")
+        return intent, location
     except Exception as e:
         print(f"classify_intent error: {e} — using keyword fallback")
-        return _keyword_fallback(text)
+        return _keyword_fallback(text), None
 
 def _strip_emoji(text):
     """Remove emoji characters so TTS doesn't read them aloud."""
@@ -1249,7 +1261,7 @@ def main():
                 spoken = None   # text to convert to audio
                 fallback = None  # text fallback if TTS fails
 
-                intent = classify_intent(transcript)
+                intent, location = classify_intent(transcript)
 
                 if intent == "reminder":
                     result = parse_reminder_groq(transcript)
@@ -1272,7 +1284,6 @@ def main():
                         spoken = None
                         fallback = "⚠️ Couldn't parse that reminder. Try: 'remind me to call mom at 8:30 PM'."
                 elif intent == "weather":
-                    location = extract_location(transcript)
                     response = fetch_weather(location)
                     print(f"Weather response: {response}")
                     if response:
@@ -1284,7 +1295,6 @@ def main():
                     else:
                         fallback = f"⚠️ Couldn't fetch weather for '{location}'. You said: {transcript}"
                 elif intent == "time":
-                    location = extract_location(transcript)
                     response = fetch_time(location)
                     print(f"Time response: {response}")
                     if response:

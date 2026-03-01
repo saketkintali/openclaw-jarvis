@@ -1,5 +1,5 @@
      ╔══════════════════════════════════════════════════════════════════════════╗
-     ║                           YOUR WHATSAPP                                 ║
+     ║                        YOUR WHATSAPP (Saket)                            ║
      ╚══════════════════════════════╤═══════════════════════════════════════════╝
                                     │
                          ┌──────────▼──────────┐
@@ -28,10 +28,12 @@
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║                         INTENT ROUTER                                   ║
 ║          classify_intent() — Groq llama-3.1-8b-instant                  ║
-║          (temperature=0, max_tokens=10, direct to api.groq.com)         ║
+║          (temperature=0, max_tokens=50, direct to api.groq.com)         ║
+║          returns JSON: {"intent": "...", "location": "City or null"}    ║
+║          location=null → use DEFAULT_LOCATION for weather/time          ║
 ║                                                                         ║
 ║  "reminder"        →  setting or asking about a reminder                ║
-║  "weather"         →  weather, rain, umbrella, jacket, outdoor, ...     ║
+║  "weather"         →  weather, jacket, outdoor activity, going out now  ║
 ║  "time"            →  current time in a specific location               ║
 ║  "email"           →  checking or reading inbox / gmail                 ║
 ║  "calendar_find"   →  what's on schedule, meetings, availability        ║
@@ -46,13 +48,13 @@
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │ REMINDER   WEATHER    TIME      EMAIL     CAL FIND  CAL CREATE  CAL DELETE  GENERAL   │
 │                                                                                        │
-│ parse_     extract_   extract_  build     build     build       NL instruct query      │
-│ reminder_  location() location  instr +   instr +   instr +     to Zapier:  to         │
-│ groq()     strip time ()        query +   date      date        "do not     Groq 70b   │
-│ (8b,       refs       │         date ctx  window    window      ask follow- direct     │
-│  temp=0,   │          ▼         │         (SOD/EOD  (natural    ups, delete            │
-│  JSON)     ▼          fetch_    ▼         from      language    now"                   │
-│            fetch_     time()    fetch_    query)    query)      │                      │
+│ parse_     location   location  build     build     build       NL instruct query      │
+│ reminder_  from       from      instr +   instr +   instr +     to Zapier:  to         │
+│ groq()     classify_  classify_ query +   date      date        "do not     Groq 70b   │
+│ (8b,       intent()   intent()  date ctx  window    window      ask follow- direct     │
+│  temp=0,   │          │         │         (SOD/EOD  (natural    ups, delete            │
+│  JSON)     ▼          ▼         ▼         from      language    now"                   │
+│            fetch_     fetch_    fetch_    query)    query)      │                      │
 │ ▼          weather()  world-    gmail_    │          │          if followUp:           │
 │ save to    open-meteo time      zapier()  fetch_    create_     auto-find →            │
 │ remind.    REST API   REST API  │         cal_      cal_event_  parse title            │
@@ -102,8 +104,10 @@
   GROQ USAGE SUMMARY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  classify_intent()     llama-3.1-8b-instant  temp=0  max_tokens=10
-                        → routing only, never generates responses
+  classify_intent()     llama-3.1-8b-instant  temp=0  max_tokens=50
+                        → returns JSON {intent, location}
+                        → routing + location extraction in one call
+                        → location=null uses DEFAULT_LOCATION
 
   get_groq_response()   llama-3.3-70b-versatile  temp=0.7  max_tokens=150
                         → called from within each handler (not a pipeline step)
