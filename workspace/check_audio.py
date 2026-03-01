@@ -139,7 +139,13 @@ def main():
                     )
                     response = fetch_gmail_zapier(_email_instr)
                     print(f"Email response: {response}")
-                    if response:
+                    if response == "no_emails_found":
+                        spoken = get_groq_response(
+                            f"The user asked: \"{transcript}\"\n"
+                            "Gmail returned no matching emails. Tell them there are none, in one natural sentence as Jarvis."
+                        ) or "No matching emails found, sir."
+                        fallback = "🎙️ " + spoken
+                    elif response:
                         spoken = get_groq_response(
                             f"The user asked: \"{transcript}\"\nHere is the data: {response}\n"
                             "Rephrase this as a natural spoken sentence."

@@ -315,7 +315,7 @@ def fetch_time(location=None):
         print(f"Timezone fetch error: {e}")
         return None
 
-# ── Zapier MCP ────────────────────────────────────────────────────────────────
+# ── Gmail (Zapier MCP) ────────────────────────────────────────────────────────
 def fetch_gmail_zapier(instructions=None):
     """Fetch Gmail emails via Zapier MCP. Returns formatted string or None.
     Requires a Gmail AI Action added at zapier.com/ai-actions.
@@ -450,6 +450,9 @@ def fetch_gmail_zapier(instructions=None):
                     lines.append("• " + " | ".join(parts))
                 if lines:
                     return f"{len(results)} email(s):\n" + "\n".join(lines)
+            else:
+                # Empty results array — no emails matched the query
+                return "no_emails_found"
         except (json.JSONDecodeError, ValueError):
             pass
 
@@ -459,7 +462,7 @@ def fetch_gmail_zapier(instructions=None):
         print(f"Zapier email error: {e}")
         return None
 
-
+# ── Zapier MCP ────────────────────────────────────────────────────────────────
 _ZAPIER_MCP_CFG = Path(os.environ.get("USERPROFILE", ".")) / ".openclaw" / "workspace" / "config" / "mcporter.json"
 
 def fetch_calendar_zapier(query=None):

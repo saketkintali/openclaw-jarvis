@@ -119,7 +119,13 @@ def main():
             "Return up to 5 results, most recent first."
         )
         resp = fetch_gmail_zapier(_email_instr)
-        if resp:
+        if resp == "no_emails_found":
+            answer = get_groq_response(
+                f"The user asked: \"{clean}\"\n"
+                "Gmail returned no matching emails. Tell them there are none, in one natural sentence as Jarvis."
+            ) or "No matching emails found, sir."
+            parts.append(answer)
+        elif resp:
             for line in resp.split("\n"):
                 line = line.strip()
                 if line:
