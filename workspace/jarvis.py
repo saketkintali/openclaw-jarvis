@@ -230,33 +230,52 @@ def fetch_weather(location=None):
         if admin:
             loc_name = f"{loc_name}, {admin}"
 
-        # Fetch current conditions + hourly precipitation for today
+        # Fetch current conditions + hourly precipitation + 2-day daily forecast
         wx_url = (f"https://api.open-meteo.com/v1/forecast"
                   f"?latitude={lat}&longitude={lon}"
                   f"&current_weather=true&temperature_unit=fahrenheit&windspeed_unit=mph"
-                  f"&hourly=precipitation_probability&forecast_days=1"
+                  f"&hourly=precipitation_probability&forecast_days=2"
+                  f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
                   f"&timezone=America%2FLos_Angeles")
         wx = json.loads(urllib.request.urlopen(wx_url, timeout=8).read())
         cw = wx["current_weather"]
         desc = WEATHER_CODES.get(int(cw["weathercode"]), "Unknown")
         current_line = f"{loc_name}: {desc}, {cw['temperature']}°F, wind {cw['windspeed']} mph"
 
-        # Build hourly rain chance string (every 2 hours, 8am–8pm)
+        # Build hourly rain chance string for today (every 2 hours, 8am–8pm)
         hourly = wx.get("hourly", {})
         times = hourly.get("time", [])
         probs = hourly.get("precipitation_probability", [])
+        today_str = times[0][:10] if times else ""
         slots = []
         for t, p in zip(times, probs):
-            if p is None:
+            if p is None or t[:10] != today_str:
                 continue
             hour_str = t[11:16]  # "HH:MM"
             h = int(hour_str[:2])
             if 8 <= h <= 20 and h % 2 == 0:
                 label = f"{h if h <= 12 else h - 12}{'am' if h < 12 else 'pm'}"
                 slots.append(f"{label} {p}%")
+
+        # Build tomorrow's daily summary
+        daily = wx.get("daily", {})
+        daily_dates = daily.get("time", [])
+        tomorrow_line = ""
+        if len(daily_dates) >= 2:
+            tmr_code = daily.get("weathercode", [None, None])[1]
+            tmr_max = daily.get("temperature_2m_max", [None, None])[1]
+            tmr_min = daily.get("temperature_2m_min", [None, None])[1]
+            tmr_rain = daily.get("precipitation_probability_max", [None, None])[1]
+            tmr_desc = WEATHER_CODES.get(int(tmr_code), "Unknown") if tmr_code is not None else "Unknown"
+            tomorrow_line = (f"Tomorrow ({daily_dates[1]}): {tmr_desc}, "
+                             f"high {tmr_max}°F, low {tmr_min}°F, rain {tmr_rain}%")
+
+        result = current_line
         if slots:
-            return current_line + "\nHourly rain chance: " + " | ".join(slots)
-        return current_line
+            result += "\nToday rain chance: " + " | ".join(slots)
+        if tomorrow_line:
+            result += "\n" + tomorrow_line
+        return result
     except Exception as e:
         print(f"Weather fetch error: {e}")
         return None
