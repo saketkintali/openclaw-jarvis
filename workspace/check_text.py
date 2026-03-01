@@ -191,7 +191,7 @@ def main():
     elif intent == "movies":
         resp = fetch_movies_tmdb(clean)
         print(f"Movies: {resp}")
-        if resp:
+        if resp and (resp.startswith("•") or "Recent movies" in resp):
             answer = get_groq_response(
                 f"The user asked: \"{clean}\"\nMovie data from TMDB:\n{resp}\n"
                 "Answer their specific question directly. No caveats, no explanation. "
@@ -199,6 +199,8 @@ def main():
                 "If they used a plural word (recent movies, films, filmography), list only titles and years, one per line."
             ) or resp
             parts.append(answer)
+        elif resp:
+            parts.append(resp)  # error message from TMDB — send as-is
         else:
             parts.append("⚠️ Couldn't find movie info right now.")
 

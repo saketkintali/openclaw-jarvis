@@ -209,13 +209,16 @@ def main():
                 elif intent == "movies":
                     response = fetch_movies_tmdb(transcript)
                     print(f"Movies response: {response}")
-                    if response:
+                    if response and (response.startswith("•") or "Recent movies" in response):
                         spoken = get_groq_response(
                             f"The user asked: \"{transcript}\"\nMovie data from TMDB:\n{response}\n"
                             "Answer their specific question directly. No caveats, no explanation. "
                             "If they used a singular word (last, latest, recent movie), say ONLY the title and year, e.g. 'Here, 2024, sir.' Nothing else. "
                             "If they used a plural word (recent movies, films, filmography), read only the titles and years."
                         ) or response
+                        fallback = response
+                    elif response:
+                        spoken = response  # error message — speak as-is
                         fallback = response
                     else:
                         fallback = "⚠️ Couldn't find movie info right now."

@@ -1145,9 +1145,17 @@ def fetch_movies_tmdb(query):
     if role == "director":
         movies = [m for m in credits.get("crew", [])
                   if m.get("job") == "Director" and m.get("release_date") and m["release_date"] <= today]
+        # If no director credits, person is likely an actor — fall back to cast
+        if not movies:
+            movies = [m for m in credits.get("cast", [])
+                      if m.get("release_date") and m["release_date"] <= today]
     else:
         movies = [m for m in credits.get("cast", [])
                   if m.get("release_date") and m["release_date"] <= today]
+        # If no cast credits, try director credits as fallback
+        if not movies:
+            movies = [m for m in credits.get("crew", [])
+                      if m.get("job") == "Director" and m.get("release_date") and m["release_date"] <= today]
     movies.sort(key=lambda m: m["release_date"], reverse=True)
     movies = movies[:5]
 
