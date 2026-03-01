@@ -1051,44 +1051,111 @@ _USDA_NUTRIENTS = {
 }
 
 def fetch_nutrition(query):
-    """Look up macros and calories via USDA FoodData Central /foods/search.
+    """Look up macros for one or more foods with quantities via USDA FoodData Central.
+    Parses multi-item queries (e.g. '8 sushi rolls and 130g yogurt'), scales each
+    item to the requested quantity, and returns per-item breakdown + total calories.
     Returns formatted string, 'no_food_found', or None on error.
-    Nutrient values are per 100g (USDA standard serving).
     """
     if not USDA_API_KEY:
         print("USDA_API_KEY not set")
         return None
+
+    # 1. Use Groq to extract food items + quantities from natural language query
+    parse_system = (
+        "Extract all food items and quantities from the user query.\n"
+        "Reply with ONLY a valid JSON array, no other text.\n"
+        'Format: [{"food": "food name", "quantity": number, "unit": "g|ml|pieces|cups|oz|tbsp", "approx_grams": number}]\n'
+        "approx_grams = estimated weight in grams for ONE unit of that item.\n"
+        "For g/ml units set approx_grams=1 (quantity is already in grams).\n"
+        "Examples: 1 sushi roll piece≈30g, 1 egg≈60g, 1 banana≈120g, 1 cup yogurt≈245g, 1oz≈28g"
+    )
+    items = []
     try:
-        url = (
-            "https://api.nal.usda.gov/fdc/v1/foods/search"
-            f"?query={urllib.parse.quote(query)}"
-            f"&api_key={USDA_API_KEY}"
-            "&pageSize=3"
-            "&dataType=Foundation,SR%20Legacy"
+        payload = json.dumps({
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {"role": "system", "content": parse_system},
+                {"role": "user",   "content": query},
+            ],
+            "max_tokens": 250,
+            "temperature": 0,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {GROQ_API_KEY}",
+                     "User-Agent": "Mozilla/5.0"},
         )
-        data = json.loads(urllib.request.urlopen(url, timeout=10).read())
-        foods = data.get("foods", [])
+        raw = json.loads(urllib.request.urlopen(req, timeout=10).read())["choices"][0]["message"]["content"].strip()
+        if "```" in raw:
+            raw = raw.split("```")[1].lstrip("json").strip()
+        items = json.loads(raw)
+        print(f"nutrition items: {items}")
+    except Exception as e:
+        print(f"nutrition parse error: {e} — treating as single 100g item")
+        items = [{"food": query, "quantity": 100, "unit": "g", "approx_grams": 1}]
+
+    if not items:
+        return "no_food_found"
+
+    # 2. Look up each item in USDA and scale to requested quantity
+    results = []
+    total_cal = 0
+
+    for item in items[:4]:
+        food_name  = item.get("food", "")
+        quantity   = float(item.get("quantity", 100))
+        unit       = item.get("unit", "g")
+        approx_g   = float(item.get("approx_grams", 1))
+        total_g    = quantity if unit in ("g", "ml", "grams") else quantity * approx_g
+
+        try:
+            url = (
+                "https://api.nal.usda.gov/fdc/v1/foods/search"
+                f"?query={urllib.parse.quote(food_name)}"
+                f"&api_key={USDA_API_KEY}"
+                "&pageSize=3&dataType=Foundation,SR%20Legacy"
+            )
+            data = json.loads(urllib.request.urlopen(url, timeout=10).read())
+            foods = data.get("foods", [])
+        except Exception as e:
+            print(f"USDA lookup error for {food_name}: {e}")
+            continue
+
         if not foods:
-            return "no_food_found"
+            results.append(f"• {food_name}: not found")
+            continue
 
         food = foods[0]
-        name = food.get("description", query).title()
+        usda_name = food.get("description", food_name).title()
         by_num = {n["nutrientNumber"]: n.get("value") for n in food.get("foodNutrients", [])
                   if n.get("nutrientNumber") and n.get("value") is not None}
 
+        scale = total_g / 100.0
         parts = []
-        for num, (label, unit) in _USDA_NUTRIENTS.items():
+        cal = by_num.get("208")
+        if cal is not None:
+            cal_scaled = round(cal * scale)
+            total_cal += cal_scaled
+            parts.append(f"{cal_scaled}kcal")
+        for num, (label, _) in list(_USDA_NUTRIENTS.items())[1:]:
             val = by_num.get(num)
             if val is not None:
-                parts.append(f"{label}: {val}{unit}")
+                parts.append(f"{label}: {round(val * scale, 1)}g")
 
-        if not parts:
-            return "no_food_found"
+        qty_str = f"{int(quantity) if quantity == int(quantity) else quantity}{unit}"
+        if unit not in ("g", "ml", "grams"):
+            qty_str += f" (~{int(total_g)}g)"
+        results.append(f"• {qty_str} {usda_name}: {', '.join(parts)}")
 
-        return f"{name} (per 100g): " + ", ".join(parts)
-    except Exception as e:
-        print(f"USDA nutrition error: {e}")
-        return None
+    if not results:
+        return "no_food_found"
+
+    output = "\n".join(results)
+    if len(results) > 1:
+        output += f"\nTotal: {total_cal}kcal"
+    return output
 
 
 # ── Intent classification ─────────────────────────────────────────────────────
