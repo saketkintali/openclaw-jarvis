@@ -113,4 +113,6 @@ Shared logic (intent classification, fetch functions, Groq calls, TTS) lives in 
 See `workspace/DIAGRAM.txt` for the complete flow.
 
 > **Why not use OpenClaw's agent with tool calling?**
-> Modern LLMs (including Groq's Llama 3.1+) support function/tool calling — where the LLM decides which tool to invoke and the framework executes it. This would eliminate hooks and `groq_proxy` entirely. Whether OpenClaw's agent loop supports the full cycle (define tools → LLM calls tool → execute → return result → final answer) is unclear. Python hooks implement that loop manually with full control in the meantime.
+> OpenClaw's agent always fires its own LLM reply to WhatsApp — independently of hooks. Without `groq_proxy`, every message gets two replies: one from the hook, one from the agent. `groq_proxy` silences the agent by returning empty responses on port 11435, so only the hook's reply is sent.
+>
+> The clean alternative would be defining weather, calendar, email, and nearby as MCP tools that OpenClaw's agent invokes directly — eliminating both hooks and `groq_proxy`. That requires OpenClaw to support the full tool-calling cycle (define tools → LLM selects tool → execute → return result → final answer), which hasn't been verified. Python hooks implement that loop manually in the meantime.
