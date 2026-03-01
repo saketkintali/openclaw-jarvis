@@ -56,9 +56,9 @@ Open **System Properties → Environment Variables** (search "Edit the system en
 
 **4. Configure Zapier MCP (Gmail + Google Calendar)**
 
-- Go to [zapier.com/ai-actions](https://zapier.com/ai-actions)
+- Go to [mcp.zapier.com](https://mcp.zapier.com)
 - Add these AI Actions: **Gmail: Find Email**, **Google Calendar Find Events**, **Google Calendar Quick Add Event**
-- Open the **MCP** tab, copy the connection URL
+- Copy your MCP connection URL from the dashboard
 - Edit `workspace/config/mcporter.json` and replace `YOUR_ZAPIER_MCP_TOKEN` with that URL
 
 **5. Install OpenClaw hooks**
