@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
     classify_intent, fetch_weather, fetch_time, fetch_nearby,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
-    parse_reminder_groq, save_reminder,
+    parse_reminder_groq, save_reminder, fetch_movies_tmdb,
     get_groq_response, send_whatsapp, send_whatsapp_audio,
     WHATSAPP_TARGET, get_ai_response,
 )
@@ -187,6 +187,14 @@ def main():
         else:
             parts.append("⚠️ Couldn't get nutrition info right now.")
         print(f"Nutrition: {answer}")
+
+    elif intent == "movies":
+        resp = fetch_movies_tmdb(clean)
+        print(f"Movies: {resp}")
+        if resp:
+            parts.append(resp)
+        else:
+            parts.append("⚠️ Couldn't find movie info right now.")
 
     if not parts:
         if audio:

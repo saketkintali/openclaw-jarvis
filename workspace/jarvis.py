@@ -23,6 +23,7 @@ DEFAULT_LOCATION_NAME = os.environ.get("DEFAULT_LOCATION_NAME", "New York")  # H
 
 GROQ_API_KEY          = os.environ.get("GROQ_API_KEY", "")            # From console.groq.com
 GROQ_MODEL            = "llama-3.3-70b-versatile"
+TMDB_API_KEY          = os.environ.get("TMDB_API_KEY", "")            # From themoviedb.org/settings/api
 
 # ── Weather codes ─────────────────────────────────────────────────────────────
 WEATHER_CODES = {
@@ -1054,10 +1055,99 @@ def get_groq_response(user_text, allow_knowledge=False):
         return None
 
 
+# ── TMDB movies ───────────────────────────────────────────────────────────────
+def fetch_movies_tmdb(query):
+    """Fetch recent movies for an actor/director via TMDB API."""
+    if not TMDB_API_KEY:
+        return None
+    import urllib.request, urllib.error, json as _json, datetime as _dt
+
+    # Extract person name + role using Groq 8b
+    extract_payload = _json.dumps({
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content":
+                "Extract the person's name from the movie query. Reply ONLY with valid JSON.\n"
+                "Format: {\"name\": \"Full Name\", \"role\": \"actor\" or \"director\"}\n"
+                "If no person name found, return {\"name\": null, \"role\": null}"},
+            {"role": "user", "content": query},
+        ],
+        "max_tokens": 50,
+        "temperature": 0,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=extract_payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "User-Agent": "Mozilla/5.0",
+        },
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=10)
+        raw = _json.loads(resp.read())["choices"][0]["message"]["content"].strip()
+        parsed = _json.loads(raw)
+        person_name = parsed.get("name")
+        role = (parsed.get("role") or "actor").lower()
+    except Exception as e:
+        print(f"TMDB name extract error: {e}")
+        return None
+
+    if not person_name:
+        return None
+
+    # Search TMDB for person
+    try:
+        search_url = (
+            f"https://api.themoviedb.org/3/search/person"
+            f"?query={urllib.parse.quote(person_name)}&api_key={TMDB_API_KEY}"
+        )
+        results = _json.loads(urllib.request.urlopen(search_url, timeout=8).read())
+        if not results.get("results"):
+            return f"Couldn't find anyone named '{person_name}' on TMDB."
+        person = results["results"][0]
+        person_id = person["id"]
+        person_name_official = person["name"]
+    except Exception as e:
+        print(f"TMDB search error: {e}")
+        return None
+
+    # Get movie credits
+    try:
+        credits_url = (
+            f"https://api.themoviedb.org/3/person/{person_id}/movie_credits"
+            f"?api_key={TMDB_API_KEY}"
+        )
+        credits = _json.loads(urllib.request.urlopen(credits_url, timeout=8).read())
+    except Exception as e:
+        print(f"TMDB credits error: {e}")
+        return None
+
+    today = _dt.date.today().isoformat()
+    if role == "director":
+        movies = [m for m in credits.get("crew", [])
+                  if m.get("job") == "Director" and m.get("release_date") and m["release_date"] <= today]
+    else:
+        movies = [m for m in credits.get("cast", [])
+                  if m.get("release_date") and m["release_date"] <= today]
+    movies.sort(key=lambda m: m["release_date"], reverse=True)
+    movies = movies[:5]
+
+    if not movies:
+        return f"No released movies found for {person_name_official}."
+
+    lines = [f"Recent movies — {person_name_official}:"]
+    for m in movies:
+        year = m["release_date"][:4]
+        lines.append(f"• {m['title']} ({year})")
+    return "\n".join(lines)
+
+
 # ── Intent classification ─────────────────────────────────────────────────────
 _INTENT_CATEGORIES = {
     "reminder", "weather", "time", "email",
-    "calendar_find", "calendar_create", "nearby", "nutrition", "general"
+    "calendar_find", "calendar_create", "nearby", "nutrition", "movies", "general"
 }
 
 def _keyword_fallback(text):
@@ -1073,6 +1163,8 @@ def _keyword_fallback(text):
         return "nearby"
     if any(w in tl for w in ("calorie", "calories", "macro", "macros", "protein", "carb", "carbs", "nutrition", "fat in", "how much fat", "how many calories")):
         return "nutrition"
+    if any(w in tl for w in ("movie", "film", "actor", "actress", "director", "starring", "filmography", "latest film", "recent film", "new film")):
+        return "movies"
     return "general"
 
 def classify_intent(text):
@@ -1091,6 +1183,7 @@ def classify_intent(text):
         "calendar_create — creating, adding, booking, or scheduling a new event\n"
         "nearby — finding nearby places: restaurants, cafes, bars, pharmacies, hospitals, shops, etc.\n"
         "nutrition — calories, macros, protein, fat, carbs, or nutrition info for any food\n"
+        "movies — latest, recent, or filmography of an actor or director; movie release queries\n"
         "general — anything else\n\n"
         "location: the specific city or place explicitly mentioned, or null if none. "
         "Do not infer locations from context (e.g. 'a walk', 'a trip', 'outside' are not locations)."

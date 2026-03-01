@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
     classify_intent, fetch_weather, fetch_time, fetch_nearby,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
-    parse_reminder_groq, save_reminder,
+    parse_reminder_groq, save_reminder, fetch_movies_tmdb,
     get_groq_response, send_whatsapp, send_whatsapp_audio,
     _strip_emoji, WHATSAPP_TARGET, get_ai_response,
     check_due_reminders,
@@ -206,6 +206,17 @@ def main():
                         spoken = None
                         fallback = "⚠️ Couldn't get nutrition info right now."
                     print(f"Nutrition: {spoken}")
+                elif intent == "movies":
+                    response = fetch_movies_tmdb(transcript)
+                    print(f"Movies response: {response}")
+                    if response:
+                        spoken = get_groq_response(
+                            f"The user asked: \"{transcript}\"\nMovie data:\n{response}\n"
+                            "Read just the movie titles and years. No intro. Be concise."
+                        ) or response
+                        fallback = response
+                    else:
+                        fallback = "⚠️ Couldn't find movie info right now."
                 else:
                     # General question — call Groq as Jarvis and reply as audio
                     print("General audio query — calling Groq.")

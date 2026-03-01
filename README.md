@@ -1,6 +1,6 @@
 # OpenClaw Jarvis
 
-A personal WhatsApp AI assistant (Jarvis) that runs on [OpenClaw](https://openclaw.ai). Talk to it by text or voice and it handles your day — checking weather and time worldwide, reading Gmail, managing Google Calendar, finding places nearby, answering nutrition questions, setting reminders, and answering general questions. Uses Groq for fast LLM responses, Zapier for Gmail and Google Calendar, OpenStreetMap for nearby search, and local speech-to-text for voice messages.
+A personal WhatsApp AI assistant (Jarvis) that runs on [OpenClaw](https://openclaw.ai). Talk to it by text or voice and it handles your day — checking weather and time worldwide, reading Gmail, managing Google Calendar, finding places nearby, looking up movies and actors, answering nutrition questions, setting reminders, and answering general questions. Uses Groq for fast LLM responses, Zapier for Gmail and Google Calendar, OpenStreetMap for nearby search, TMDB for movie data, and local speech-to-text for voice messages.
 
 ---
 
@@ -18,6 +18,7 @@ Send a WhatsApp message (text or voice) to your OpenClaw number. Groq classifies
 | Reminder | "remind me to call mom at 8pm" | saved locally, fires at that time |
 | Nearby | "find me a good Italian restaurant" / "any pharmacies close by?" | Overpass API (OpenStreetMap) → up to 3 results with distance |
 | Nutrition | "how many calories in a banana?" / "macros in chicken breast" | Groq llama-3.3-70b |
+| Movies | "latest movies of Tom Hanks" / "films directed by Nolan" | TMDB API → formatted list |
 | General | anything else | Groq llama-3.3-70b as Jarvis |
 
 See `workspace/DIAGRAM.txt` for the full architecture.
@@ -90,6 +91,7 @@ This fires any reminders whose time has passed.
 | `GROQ_API_KEY` | Yes | From [console.groq.com](https://console.groq.com) |
 | `DEFAULT_LOCATION` | No | ZIP code or city for weather/time default (e.g. `10001`) |
 | `DEFAULT_LOCATION_NAME` | No | Human-readable city name for that default (e.g. `New York`) |
+| `TMDB_API_KEY` | No* | From [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) — required for movie queries |
 
 ---
 
