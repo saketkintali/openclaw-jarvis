@@ -211,8 +211,10 @@ def main():
                     print(f"Movies response: {response}")
                     if response:
                         spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nMovie data:\n{response}\n"
-                            "Read just the movie titles and years. No intro. Be concise."
+                            f"The user asked: \"{transcript}\"\nMovie data from TMDB:\n{response}\n"
+                            "Answer their specific question directly. If they asked for the last or latest movie, "
+                            "say only that one title and year. If they asked for recent or multiple, read them. "
+                            "No intro, no header."
                         ) or response
                         fallback = response
                     else:

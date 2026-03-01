@@ -192,9 +192,13 @@ def main():
         resp = fetch_movies_tmdb(clean)
         print(f"Movies: {resp}")
         if resp:
-            for line in resp.split("\n"):
-                if line.strip():
-                    parts.append(line.strip())
+            answer = get_groq_response(
+                f"The user asked: \"{clean}\"\nMovie data from TMDB:\n{resp}\n"
+                "Answer their specific question directly. If they asked for the last or latest movie, "
+                "give only that one title and year. If they asked for recent or multiple, list them. "
+                "Never use a header or repeat their question."
+            ) or resp
+            parts.append(answer)
         else:
             parts.append("⚠️ Couldn't find movie info right now.")
 
