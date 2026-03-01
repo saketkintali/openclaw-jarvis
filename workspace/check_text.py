@@ -118,9 +118,7 @@ def main():
             "Search Gmail accordingly. Include emails from any date if the user asks about older emails. "
             "Return up to 5 results, most recent first."
         )
-        _read_words = {"read", "reads", "reading", "content", "body", "say", "says", "said"}
-        _want_body = bool(set(clean.lower().split()) & _read_words)
-        resp = fetch_gmail_zapier(_email_instr, want_body=_want_body)
+        resp = fetch_gmail_zapier(_email_instr)
         if resp:
             for line in resp.split("\n"):
                 line = line.strip()

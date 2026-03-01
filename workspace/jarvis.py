@@ -20,8 +20,7 @@ WHATSAPP_TARGET       = os.environ.get("WHATSAPP_TARGET", "")         # Your Wha
 GATEWAY_TOKEN         = os.environ.get("GATEWAY_TOKEN", "")           # From openclaw.json → gateway.token
 DEFAULT_LOCATION      = os.environ.get("DEFAULT_LOCATION", "10001")   # ZIP code or city name
 DEFAULT_LOCATION_NAME = os.environ.get("DEFAULT_LOCATION_NAME", "New York")  # Human-readable city name
-GMAIL_EMAIL           = os.environ.get("GMAIL_EMAIL", "")             # Gmail address
-GMAIL_PASSWORD        = os.environ.get("GMAIL_PASSWORD", "")          # Gmail App Password
+
 GROQ_API_KEY          = os.environ.get("GROQ_API_KEY", "")            # From console.groq.com
 GROQ_MODEL            = "llama-3.3-70b-versatile"
 
@@ -297,57 +296,30 @@ def fetch_time(location=None):
         print(f"Timezone fetch error: {e}")
         return None
 
-# ── Gmail (IMAP fallback) ─────────────────────────────────────────────────────
-def fetch_amazon_emails():
-    """Fetch today's Amazon emails from Gmail. Returns formatted string or None."""
-    import imaplib
-    import email as email_lib
-    from datetime import datetime
-    try:
-        mail = imaplib.IMAP4_SSL('imap.gmail.com')
-        mail.login(GMAIL_EMAIL, GMAIL_PASSWORD)
-        mail.select('INBOX')
-        today = datetime.now().strftime("%d-%b-%Y")  # e.g. "26-Feb-2026"
-        status, messages = mail.search(None, f'FROM amazon SINCE {today}')
-        ids = messages[0].split() if messages[0] else []
-        if not ids:
-            mail.logout()
-            return f"No Amazon emails today ({today})."
-        results = []
-        for mid in reversed(ids[-5:]):  # last 5, newest first
-            status, msg_data = mail.fetch(mid, '(RFC822)')
-            msg = email_lib.message_from_bytes(msg_data[0][1])
-            subject = msg['Subject'] or '(no subject)'
-            results.append(f"• {subject}")
-        mail.logout()
-        count = len(ids)
-        return f"{count} Amazon email(s) today ({today}):\n" + "\n".join(results)
-    except Exception as e:
-        print(f"Gmail fetch error: {e}")
-        return None
-
 # ── Zapier MCP ────────────────────────────────────────────────────────────────
-_ZAPIER_MCP_CFG = Path(os.environ.get("USERPROFILE", ".")) / ".openclaw" / "workspace" / "config" / "mcporter.json"
-
-def fetch_gmail_zapier(instructions_override=None, want_body=False):
-    """Fetch Gmail emails via Zapier MCP. Falls back to fetch_amazon_emails() on failure."""
-    from datetime import datetime as _dt_local
+def fetch_gmail_zapier(instructions=None):
+    """Fetch Gmail emails via Zapier MCP. Returns formatted string or None.
+    Requires a Gmail AI Action added at zapier.com/ai-actions.
+    """
     try:
         cfg = json.loads(_ZAPIER_MCP_CFG.read_text())
         mcp_url = cfg["mcpServers"]["zapier"]["baseUrl"]
     except Exception as e:
         print(f"Zapier config error: {e}")
-        return fetch_amazon_emails()
+        return None
 
     def zapier_rpc(method, params, req_id=None):
         body = {"jsonrpc": "2.0", "method": method, "params": params}
         if req_id is not None:
             body["id"] = req_id
         req = urllib.request.Request(
-            mcp_url, data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json",
-                     "Accept": "application/json, text/event-stream",
-                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            mcp_url,
+            data=json.dumps(body).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            }
         )
         resp = urllib.request.urlopen(req, timeout=45)
         raw = resp.read().decode("utf-8")
@@ -363,90 +335,113 @@ def fetch_gmail_zapier(instructions_override=None, want_body=False):
         return None
 
     try:
-        init_r = zapier_rpc("initialize", {"protocolVersion": "2025-03-26",
-            "capabilities": {}, "clientInfo": {"name": "jarvis", "version": "1.0"}}, req_id=1)
+        # 1. Initialize
+        init_r = zapier_rpc("initialize", {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "jarvis", "version": "1.0"},
+        }, req_id=1)
         if not init_r:
-            return fetch_amazon_emails()
+            print("Zapier: no initialize response")
+            return None
+
+        # 2. Notify initialized
         try:
             zapier_rpc("notifications/initialized", {})
         except Exception:
             pass
 
+        # 3. List tools
         list_r = zapier_rpc("tools/list", {}, req_id=2)
         if not list_r:
-            return fetch_amazon_emails()
+            print("Zapier: no tools/list response")
+            return None
         tools = list_r.get("result", {}).get("tools", [])
+        print(f"Zapier tools (email): {[t.get('name') for t in tools]}")
 
+        # 4. Find best Gmail/email tool
         def _score(t):
             n = t.get("name", "").lower()
-            if "gmail" in n and "find" in n: return 2
-            if "gmail" in n: return 1
+            if "gmail" in n and "find" in n:
+                return 4
+            if "gmail" in n and "search" in n:
+                return 3
+            if "gmail" in n:
+                return 2
+            if ("email" in n or "mail" in n) and ("find" in n or "search" in n or "read" in n):
+                return 1
             return 0
-        gmail_tools = sorted([t for t in tools if _score(t) > 0], key=_score, reverse=True)
-        if not gmail_tools:
-            print("No Gmail tool found in Zapier — falling back to IMAP.")
-            return fetch_amazon_emails()
-        gmail_tool = gmail_tools[0]
-        print(f"Using Gmail tool: {gmail_tool['name']}")
+        email_tools = sorted([t for t in tools if _score(t) > 0], key=_score, reverse=True)
+        if not email_tools:
+            print("No Gmail tool found in Zapier. Add 'Gmail: Find Email' at zapier.com/ai-actions.")
+            return None
+        email_tool = email_tools[0]
+        print(f"Using email tool: {email_tool['name']}")
 
-        now_local = _dt_local.now()
-        today_human = now_local.strftime("%B %d, %Y")
-        props = gmail_tool.get("inputSchema", {}).get("properties", {})
+        # 5. Build args
+        from datetime import datetime as _dt_local
+        today_human = _dt_local.now().strftime("%B %d, %Y")
+        query = instructions or f"Find emails from today, {today_human}. Return up to 5 most recent."
+
+        props = email_tool.get("inputSchema", {}).get("properties", {})
         args = {}
         for key in props:
             kl = key.lower()
-            if kl == "instructions":
-                args[key] = instructions_override or f"Find all emails received today, {today_human}. Most recent first. Up to 5."
-            elif kl == "output_hint":
-                if want_body:
-                    args[key] = "email subject, sender name, email body or message content"
-                else:
-                    args[key] = "email subject, sender name or email address"
+            if any(w in kl for w in ("instructions", "query", "search", "input", "text")):
+                args[key] = query
+                break
+        if not args and props:
+            args[next(iter(props))] = query
 
-        print(f"Calling {gmail_tool['name']} args={args}")
-        call_r = zapier_rpc("tools/call", {"name": gmail_tool["name"], "arguments": args}, req_id=3)
+        print(f"Calling {email_tool['name']} args={args}")
+        call_r = zapier_rpc("tools/call", {
+            "name": email_tool["name"],
+            "arguments": args,
+        }, req_id=3)
         if not call_r:
-            return fetch_amazon_emails()
+            print("Zapier: no tools/call response for email")
+            return None
 
         content = call_r.get("result", {}).get("content", [])
-        raw_text = next((item["text"] for item in content
-            if isinstance(item, dict) and item.get("type") == "text" and item.get("text")), None)
+        raw_text = next(
+            (item["text"] for item in content
+             if isinstance(item, dict) and item.get("type") == "text" and item.get("text")),
+            None
+        )
         if not raw_text:
-            return fetch_amazon_emails()
+            print("Zapier: empty content in email tools/call response")
+            return None
 
+        # Try to parse and format structured results
         try:
             data = json.loads(raw_text)
+            results = data.get("results", [])
+            if isinstance(results, dict):
+                results = [results]
+            if results:
+                lines = []
+                for em in results[:5]:
+                    if not isinstance(em, dict):
+                        continue
+                    subject = em.get("subject") or em.get("Subject") or "(no subject)"
+                    sender = em.get("from") or em.get("From") or em.get("sender") or ""
+                    parts = [subject]
+                    if sender:
+                        parts.append(f"From: {sender}")
+                    lines.append("• " + " | ".join(parts))
+                if lines:
+                    return f"{len(results)} email(s):\n" + "\n".join(lines)
         except (json.JSONDecodeError, ValueError):
-            return raw_text.strip()
+            pass
 
-        results = data.get("results", [])
-        if not results:
-            return "No emails found."
-        if isinstance(results, dict):
-            results = [results]
-
-        lines = []
-        for ev in results:
-            if not isinstance(ev, dict):
-                continue
-            subject = ev.get("subject") or ev.get("title") or "(no subject)"
-            sender  = ev.get("from") or ev.get("sender") or ev.get("from_name") or ev.get("from_email") or ""
-            parts = [subject]
-            if sender:
-                parts.append(f"From: {sender}")
-            lines.append("• " + " | ".join(parts))
-            if want_body:
-                body = (ev.get("body") or ev.get("body_plain") or
-                        ev.get("snippet") or ev.get("message") or "")
-                if body:
-                    lines.append(f"  {body.strip()[:400]}")
-
-        count = len(results)
-        return f"{count} email(s):\n" + "\n".join(lines)
+        return raw_text.strip()[:500] if raw_text else None
 
     except Exception as e:
-        print(f"Zapier Gmail error: {e}")
-        return fetch_amazon_emails()
+        print(f"Zapier email error: {e}")
+        return None
+
+
+_ZAPIER_MCP_CFG = Path(os.environ.get("USERPROFILE", ".")) / ".openclaw" / "workspace" / "config" / "mcporter.json"
 
 def fetch_calendar_zapier(query=None):
     """Fetch Google Calendar events via Zapier MCP (Streamable HTTP).

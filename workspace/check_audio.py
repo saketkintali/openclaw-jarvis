@@ -137,9 +137,7 @@ def main():
                         "Search Gmail accordingly. Include emails from any date if the user asks about older emails. "
                         "Return up to 5 results, most recent first."
                     )
-                    _read_words = {"read", "reads", "reading", "content", "body", "say", "says", "said"}
-                    _want_body = bool(set(transcript.lower().split()) & _read_words)
-                    response = fetch_gmail_zapier(_email_instr, want_body=_want_body)
+                    response = fetch_gmail_zapier(_email_instr)
                     print(f"Email response: {response}")
                     if response:
                         spoken = get_groq_response(

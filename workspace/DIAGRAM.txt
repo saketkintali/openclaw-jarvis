@@ -123,7 +123,7 @@
   BACKGROUND HEARTBEAT  (Windows Task Scheduler, every ~30 min)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  check_amazon.py runs
+  heartbeat.py runs
         │
         └─► check_due_reminders()
               reads reminders.json
@@ -139,7 +139,7 @@
   jarvis.py           ← shared module: all constants, fetch functions, Groq, Zapier MCP, TTS
   check_audio.py      ← thin voice pipeline: lock, state, transcribe, main()
   check_text.py       ← thin text pipeline: strip_name_prefix, wants_audio, main()
-  check_amazon.py     ← heartbeat: fires due reminders (imports jarvis)
+  heartbeat.py        ← fires due reminders (Windows Task Scheduler, every ~30 min)
   transcribe.py       ← faster-whisper wrapper (called as subprocess)
   groq_proxy.py       ← OpenClaw silencer on :11435, returns empty response
   config/mcporter.json← Zapier MCP endpoint URL + auth token
