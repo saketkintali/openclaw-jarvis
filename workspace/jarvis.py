@@ -1015,13 +1015,22 @@ JARVIS_INSTRUCTIONS = (
     "If no data is provided, say you do not have that information."
 )
 
-def get_groq_response(user_text):
-    """Call Groq API with Jarvis system prompt. Returns text or None."""
+_JARVIS_KNOWLEDGE_SUFFIX = (
+    " Answer from your training knowledge. For time-sensitive topics, give the most recent "
+    "information you have and briefly note it may not reflect the very latest."
+)
+
+def get_groq_response(user_text, allow_knowledge=False):
+    """Call Groq API with Jarvis system prompt. Returns text or None.
+    allow_knowledge=True: permits answering from training data (general queries).
+    allow_knowledge=False: strict mode — only report provided data (weather/calendar/email).
+    """
     import urllib.request, urllib.error, json as _json
+    system = JARVIS_INSTRUCTIONS + (_JARVIS_KNOWLEDGE_SUFFIX if allow_knowledge else "")
     payload = _json.dumps({
         "model": GROQ_MODEL,
         "messages": [
-            {"role": "system", "content": JARVIS_INSTRUCTIONS},
+            {"role": "system", "content": system},
             {"role": "user",   "content": user_text},
         ],
         "max_tokens": 150,

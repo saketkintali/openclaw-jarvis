@@ -197,7 +197,8 @@ def main():
                     spoken = get_groq_response(
                         f"Nutrition question: {transcript}\n"
                         "Give specific calorie numbers. If multiple foods, read each item's calories then total. "
-                        "No intro. Be concise."
+                        "No intro. Be concise.",
+                        allow_knowledge=True,
                     )
                     if spoken:
                         fallback = spoken
@@ -208,7 +209,7 @@ def main():
                 else:
                     # General question — call Groq as Jarvis and reply as audio
                     print("General audio query — calling Groq.")
-                    llm_reply = get_groq_response(transcript)
+                    llm_reply = get_groq_response(transcript, allow_knowledge=True)
                     if llm_reply:
                         spoken = llm_reply
                         fallback = llm_reply

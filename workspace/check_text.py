@@ -179,7 +179,8 @@ def main():
         answer = get_groq_response(
             f"Nutrition question: {clean}\n"
             "Give specific numbers for calories, protein, fat, and carbs. "
-            "If multiple foods are mentioned, give a per-item breakdown then a total. Be concise."
+            "If multiple foods are mentioned, give a per-item breakdown then a total. Be concise.",
+            allow_knowledge=True,
         )
         if answer:
             parts.append(answer)
@@ -191,7 +192,7 @@ def main():
         if audio:
             # User wants audio but it's not a structured query — call LLM and speak the reply
             print("Not structured, but audio requested — calling LLM.")
-            llm_reply = get_groq_response(clean)
+            llm_reply = get_groq_response(clean, allow_knowledge=True)
             if llm_reply:
                 print(f"LLM reply: {llm_reply[:80]}")
                 send_whatsapp_audio(llm_reply)
@@ -201,7 +202,7 @@ def main():
                 sys.exit(1)
         # General query — call Groq as Jarvis and reply as text
         print("Not structured, calling Groq for text reply.")
-        llm_reply = get_groq_response(clean)
+        llm_reply = get_groq_response(clean, allow_knowledge=True)
         if llm_reply:
             print(f"LLM text reply: {llm_reply[:80]}")
             send_whatsapp(llm_reply)
