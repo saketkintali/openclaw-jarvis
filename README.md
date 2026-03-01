@@ -17,7 +17,7 @@ Send a WhatsApp message (text or voice) to your OpenClaw number. Groq classifies
 | Calendar create | "lunch with John tomorrow at noon" | Zapier Google Calendar Quick Add |
 | Reminder | "remind me to call mom at 8pm" | saved locally, fires at that time |
 | Nearby | "find me a good Italian restaurant" / "any pharmacies close by?" | Overpass API (OpenStreetMap) → up to 3 results with distance |
-| Nutrition | "how many calories in a banana?" / "macros in chicken breast" | USDA FoodData Central → Groq answer |
+| Nutrition | "how many calories in a banana?" / "macros in chicken breast" | Groq llama-3.3-70b |
 | General | anything else | Groq llama-3.3-70b as Jarvis |
 
 See `workspace/DIAGRAM.txt` for the full architecture.
