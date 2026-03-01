@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
-    classify_intent, fetch_weather, fetch_time,
+    classify_intent, fetch_weather, fetch_time, fetch_nearby,
     fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
     parse_reminder_groq, save_reminder,
     get_groq_response, send_whatsapp, send_whatsapp_audio,
@@ -176,6 +176,23 @@ def main():
                         fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip())
                     else:
                         fallback = "⚠️ No calendar events found. Make sure Google Calendar is added to your Zapier AI Actions at zapier.com/ai-actions."
+                elif intent == "nearby":
+                    response = fetch_nearby(transcript, location)
+                    print(f"Nearby response: {response}")
+                    if response == "no_places_found":
+                        spoken = get_groq_response(
+                            f"The user asked: \"{transcript}\"\n"
+                            "No matching places were found within 5km. Tell them in one natural sentence as Jarvis."
+                        ) or "No matching places found nearby, sir."
+                        fallback = "🎙️ " + spoken
+                    elif response:
+                        spoken = get_groq_response(
+                            f"The user asked: \"{transcript}\"\nResults:\n{response}\n"
+                            "Read these results naturally as Jarvis in 2-3 sentences."
+                        ) or response
+                        fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip())
+                    else:
+                        fallback = "⚠️ Couldn't search nearby places right now."
                 else:
                     # General question — call Groq as Jarvis and reply as audio
                     print("General audio query — calling Groq.")

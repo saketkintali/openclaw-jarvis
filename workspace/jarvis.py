@@ -315,6 +315,125 @@ def fetch_time(location=None):
         print(f"Timezone fetch error: {e}")
         return None
 
+# ── Nearby places (Overpass / OpenStreetMap) ─────────────────────────────────
+def fetch_nearby(user_query, location=None):
+    """Find nearby places using Overpass API (OpenStreetMap).
+    Returns formatted string of results, 'no_places_found', or None on error.
+    """
+    import math, json as _j
+
+    # 1. Use Groq to extract amenity type + optional cuisine from the query
+    extract_system = (
+        "Extract the place type from the user query. Reply with ONLY valid JSON, no other text.\n"
+        "Format: {\"amenity\": \"osm_amenity_value\", \"cuisine\": \"cuisine_or_null\"}\n"
+        "amenity must be one of: restaurant, cafe, bar, pub, pharmacy, hospital, "
+        "supermarket, atm, bank, fuel, parking, hotel, gym, fast_food, cinema, library\n"
+        "cuisine: for restaurants/cafes only — italian, chinese, japanese, indian, "
+        "mexican, thai, american, pizza, sushi, etc. or null"
+    )
+    amenity = "restaurant"
+    cuisine = None
+    try:
+        payload = _j.dumps({
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {"role": "system", "content": extract_system},
+                {"role": "user",   "content": user_query},
+            ],
+            "max_tokens": 60,
+            "temperature": 0,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            },
+        )
+        raw = _j.loads(urllib.request.urlopen(req, timeout=10).read())["choices"][0]["message"]["content"].strip()
+        parsed = _j.loads(raw)
+        amenity = parsed.get("amenity", "restaurant").strip()
+        cuisine = parsed.get("cuisine") or None
+        print(f"nearby: amenity={amenity}, cuisine={cuisine}")
+    except Exception as e:
+        print(f"nearby: Groq extract error: {e} — defaulting to restaurant")
+
+    # 2. Geocode location
+    r = geocode(location or DEFAULT_LOCATION)
+    if not r:
+        return None
+    lat, lon = r["latitude"], r["longitude"]
+    loc_name = r.get("name", location or DEFAULT_LOCATION_NAME)
+    admin = r.get("admin1", "")
+    if admin:
+        loc_name = f"{loc_name}, {admin}"
+
+    # 3. Build and run Overpass query (nodes + ways, 5 km radius, up to 10 results)
+    cuisine_filter = f'[cuisine={cuisine}]' if cuisine else ""
+    oq = (
+        f'[out:json][timeout:15];'
+        f'(node[amenity={amenity}]{cuisine_filter}(around:5000,{lat},{lon});'
+        f'way[amenity={amenity}]{cuisine_filter}(around:5000,{lat},{lon}););'
+        f'out center 10;'
+    )
+    try:
+        req = urllib.request.Request(
+            "https://overpass-api.de/api/interpreter",
+            data=urllib.parse.urlencode({"data": oq}).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded",
+                     "User-Agent": "JarvisBot/1.0"},
+        )
+        data = _j.loads(urllib.request.urlopen(req, timeout=20).read())
+    except Exception as e:
+        print(f"Overpass error: {e}")
+        return None
+
+    elements = data.get("elements", [])
+    if not elements:
+        return "no_places_found"
+
+    # 4. Format results with distance
+    def _dist_mi(la, lo):
+        dlat = math.radians(la - lat)
+        dlon = math.radians(lo - lon)
+        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat)) * math.cos(math.radians(la)) * math.sin(dlon/2)**2
+        return 3958.8 * 2 * math.asin(math.sqrt(a))
+
+    lines = []
+    for el in elements:
+        tags = el.get("tags", {})
+        name = tags.get("name") or tags.get("brand")
+        if not name:
+            continue
+        el_lat = el.get("lat") or (el.get("center") or {}).get("lat")
+        el_lon = el.get("lon") or (el.get("center") or {}).get("lon")
+        dist = f"{_dist_mi(el_lat, el_lon):.1f}mi" if el_lat and el_lon else ""
+        detail = []
+        if tags.get("cuisine"):
+            detail.append(tags["cuisine"])
+        addr = " ".join(p for p in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")] if p)
+        if addr:
+            detail.append(addr)
+        if tags.get("opening_hours"):
+            detail.append(tags["opening_hours"])
+        if dist:
+            detail.append(dist)
+        line = f"• {name}"
+        if detail:
+            line += f" — {', '.join(detail[:3])}"
+        lines.append(line)
+        if len(lines) == 5:
+            break
+
+    if not lines:
+        return "no_places_found"
+
+    label = f"{cuisine} {amenity}" if cuisine else amenity
+    return f"Nearby {label}s near {loc_name}:\n" + "\n".join(lines)
+
+
 # ── Gmail (Zapier MCP) ────────────────────────────────────────────────────────
 def fetch_gmail_zapier(instructions=None):
     """Fetch Gmail emails via Zapier MCP. Returns formatted string or None.
@@ -867,7 +986,7 @@ def get_groq_response(user_text):
 # ── Intent classification ─────────────────────────────────────────────────────
 _INTENT_CATEGORIES = {
     "reminder", "weather", "time", "email",
-    "calendar_find", "calendar_create", "general"
+    "calendar_find", "calendar_create", "nearby", "general"
 }
 
 def _keyword_fallback(text):
@@ -878,6 +997,9 @@ def _keyword_fallback(text):
     if is_email_question(text):           return "email"
     if is_calendar_create_question(text): return "calendar_create"
     if is_calendar_question(text):        return "calendar_find"
+    tl = text.lower()
+    if any(w in tl for w in ("nearby", "near me", "close by", "around here", "find a ", "find me a", "restaurant", "cafe", "pharmacy", "hospital")):
+        return "nearby"
     return "general"
 
 def classify_intent(text):
@@ -894,6 +1016,7 @@ def classify_intent(text):
         "email — checking, reading, or searching emails or inbox\n"
         "calendar_find — asking about existing events, schedule, meetings, or availability\n"
         "calendar_create — creating, adding, booking, or scheduling a new event\n"
+        "nearby — finding nearby places: restaurants, cafes, bars, pharmacies, hospitals, shops, etc.\n"
         "general — anything else\n\n"
         "location: the specific city or place explicitly mentioned, or null if none. "
         "Do not infer locations from context (e.g. 'a walk', 'a trip', 'outside' are not locations)."
