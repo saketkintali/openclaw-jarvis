@@ -16,6 +16,7 @@ Send a WhatsApp message (text or voice) to your OpenClaw number. Groq classifies
 | Calendar find | "what's on my calendar today?" | Zapier Google Calendar Find |
 | Calendar create | "lunch with John tomorrow at noon" | Zapier Google Calendar Quick Add |
 | Reminder | "remind me to call mom at 8pm" | saved locally, fires at that time |
+| Nearby | "find me a good Italian restaurant" / "any pharmacies close by?" | Overpass API (OpenStreetMap) → up to 5 results with distance |
 | General | anything else | Groq llama-3.3-70b as Jarvis |
 
 See `workspace/DIAGRAM.txt` for the full architecture.
@@ -100,7 +101,7 @@ Every incoming WhatsApp message triggers one of two OpenClaw hooks:
 - **text-handler** fires on text messages → runs `check_text.py`
 - **audio-transcribe** fires on voice notes → runs `check_audio.py`, which calls `transcribe.py` (faster-whisper, tiny model, CPU)
 
-Both scripts call `classify_intent()` (Groq llama-3.1-8b-instant, temp=0) to route the message and extract the location (if any). The handler fetches real data — open-meteo for weather/time, Zapier MCP for Gmail and calendar — then passes it to `get_groq_response()` (llama-3.3-70b-versatile) for a Jarvis-style answer.
+Both scripts call `classify_intent()` (Groq llama-3.1-8b-instant, temp=0) to route the message and extract the location (if any). The handler fetches real data — open-meteo for weather/time, Zapier MCP for Gmail and calendar, Overpass API (OpenStreetMap) for nearby places — then passes it to `get_groq_response()` (llama-3.3-70b-versatile) for a Jarvis-style answer.
 
 Shared logic (intent classification, fetch functions, Groq calls, TTS) lives in `jarvis.py` and is imported by both pipelines.
 
