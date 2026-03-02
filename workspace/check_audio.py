@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audio pipeline — scans for new voice notes, transcribes, routes through Jarvis."""
+"""Audio pipeline — scans for new voice notes, transcribes, passes to Claude via OpenClaw gateway."""
 
 import os
 import sys
@@ -10,12 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
-    classify_intent, fetch_weather, fetch_time, fetch_nearby,
-    fetch_gmail_zapier, fetch_calendar_zapier, create_calendar_event_zapier,
-    parse_reminder_groq, save_reminder,
-    get_groq_response, send_whatsapp, send_whatsapp_audio,
-    _strip_emoji, WHATSAPP_TARGET, get_ai_response,
-    check_due_reminders,
+    send_whatsapp, send_whatsapp_audio,
+    WHATSAPP_TARGET, get_ai_response,
 )
 
 MEDIA_DIR  = Path(os.environ.get("USERPROFILE", ".")) / ".openclaw" / "media" / "inbound"
@@ -83,151 +79,26 @@ def main():
             if transcript:
                 print(f"Transcript: {transcript}")
 
-                spoken = None   # text to convert to audio
-                fallback = None  # text fallback if TTS fails
+                # Pass transcript to Claude via OpenClaw gateway — Claude handles intent + MCP tools
+                response = get_ai_response(transcript)
+                print(f"Claude response: {response[:120] if response else None}")
 
-                intent, location = classify_intent(transcript)
-
-                if intent == "reminder":
-                    result = parse_reminder_groq(transcript)
-                    if result:
-                        task, remind_at = result
-                        save_reminder(task, remind_at)
-                        from datetime import datetime as _dtr
-                        try:
-                            dt = _dtr.fromisoformat(remind_at)
-                            time_str = dt.strftime("%I:%M %p").lstrip("0")
-                            date_str = "today" if dt.date() == _dtr.now().date() else dt.strftime("%A")
-                            confirm = f"Reminder set for {task} at {time_str} {date_str}."
-                        except Exception:
-                            confirm = f"Reminder set: {task}."
-                        spoken = get_groq_response(
-                            f"Confirm this reminder was just saved: {confirm}."
-                        ) or confirm
-                        fallback = f"🔔 {confirm}"
-                    else:
-                        spoken = None
-                        fallback = "⚠️ Couldn't parse that reminder. Try: 'remind me to call mom at 8:30 PM'."
-                elif intent == "weather":
-                    response = fetch_weather(location)
-                    print(f"Weather response: {response}")
-                    if response:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nCurrent weather data: {_strip_emoji(response)}\n"
-                            "Answer their specific question using only this data. One concise sentence."
-                        ) or _strip_emoji(response)
-                        fallback = f"🎙️ {response}"
-                    else:
-                        fallback = f"⚠️ Couldn't fetch weather for '{location}'. You said: {transcript}"
-                elif intent == "time":
-                    response = fetch_time(location)
-                    print(f"Time response: {response}")
-                    if response:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nHere is the data: {_strip_emoji(response)}\n"
-                            "Rephrase this as a natural spoken sentence."
-                        ) or _strip_emoji(response)
-                        fallback = f"🎙️ {response}"
-                    else:
-                        fallback = f"⚠️ Couldn't fetch time for '{location}'. You said: {transcript}"
-                elif intent == "email":
-                    _today_h = __import__("datetime").datetime.now().strftime("%B %d, %Y")
-                    _email_instr = (
-                        f"Today is {_today_h}. User request: \"{transcript}\". "
-                        "Search Gmail accordingly. Include emails from any date if the user asks about older emails. "
-                        "Return up to 5 results, most recent first."
-                    )
-                    response = fetch_gmail_zapier(_email_instr)
-                    print(f"Email response: {response}")
-                    if response == "no_emails_found":
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\n"
-                            "Gmail returned no matching emails. Tell them there are none, in one natural sentence as Jarvis."
-                        ) or "No matching emails found, sir."
-                        fallback = "🎙️ " + spoken
-                    elif response:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nHere is the data: {response}\n"
-                            "Rephrase this as a natural spoken sentence."
-                        ) or response
-                        fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip())
-                    else:
-                        fallback = f"⚠️ Couldn't check Gmail. You said: {transcript}"
-                elif intent == "calendar_create":
-                    response = create_calendar_event_zapier(transcript)
-                    print(f"Calendar create response: {response}")
-                    if response:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nResult: {response}\n"
-                            "Confirm the event was created in one natural sentence."
-                        ) or response
-                        fallback = f"📅 {response}"
-                    else:
-                        fallback = "⚠️ Couldn't create the event. Try: 'create lunch tomorrow at 12pm'."
-                elif intent == "calendar_find":
-                    response = fetch_calendar_zapier(query=transcript)
-                    print(f"Calendar response: {response}")
-                    if response:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nHere is the data: {_strip_emoji(response)}\n"
-                            "Rephrase this as a natural spoken sentence."
-                        ) or _strip_emoji(response)
-                        # Flatten to one line for CLI safety — TTS path handles multi-line via Groq
-                        fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip())
-                    else:
-                        fallback = "⚠️ No calendar events found. Make sure Google Calendar is added to your Zapier AI Actions at zapier.com/ai-actions."
-                elif intent == "nearby":
-                    response = fetch_nearby(transcript, location)
-                    print(f"Nearby response: {response}")
-                    if response == "no_places_found":
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\n"
-                            "No matching places were found within 5km. Tell them in one natural sentence as Jarvis."
-                        ) or "No matching places found nearby, sir."
-                        fallback = "🎙️ " + spoken
-                    elif response:
-                        spoken = get_groq_response(
-                            f"The user asked: \"{transcript}\"\nResults:\n{response}\n"
-                            "Read just the place names. Skip addresses and opening hours. No intro, no filler. Be concise."
-                        ) or response
-                        fallback = "🎙️ " + "  ".join(l.strip() for l in response.split('\n') if l.strip().startswith("•"))
-                    else:
-                        fallback = "⚠️ Couldn't search nearby places right now."
-                elif intent == "nutrition":
-                    spoken = get_groq_response(
-                        f"Nutrition question: {transcript}\n"
-                        "Give specific calorie numbers. If multiple foods, read each item's calories then total. "
-                        "No intro. Be concise."
-                    )
-                    if spoken:
-                        fallback = spoken
-                    else:
-                        spoken = None
-                        fallback = "⚠️ Couldn't get nutrition info right now."
-                    print(f"Nutrition: {spoken}")
-                else:
-                    # General question — call Groq as Jarvis and reply as audio
-                    print("General audio query — calling Groq.")
-                    llm_reply = get_groq_response(transcript)
-                    if llm_reply:
-                        spoken = llm_reply
-                        fallback = llm_reply
-                    else:
-                        fallback = f"⚠️ Couldn't get a response. You said: {transcript}"
-
-                # Mark processed BEFORE sending
+                # Mark processed before sending
                 processed.add(str(audio_file))
                 state["processed"] = list(processed)
                 save_state(state)
 
-                if spoken:
-                    print(f"Sending audio reply: {spoken[:80]}")
-                    if not send_whatsapp_audio(spoken):
-                        if fallback:
-                            send_whatsapp(fallback)
-                elif fallback:
-                    send_whatsapp(fallback)
-                    print("Sent text fallback to WhatsApp")
+                if response:
+                    # Try audio reply first, fall back to text
+                    if not send_whatsapp_audio(response):
+                        send_whatsapp(response)
+                else:
+                    send_whatsapp("Sorry, I couldn't process that audio message.")
+            else:
+                print(f"Transcription failed for {audio_file.name}")
+                processed.add(str(audio_file))
+                state["processed"] = list(processed)
+                save_state(state)
     finally:
         release_lock()
 

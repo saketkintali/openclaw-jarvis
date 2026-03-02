@@ -23,6 +23,7 @@ DEFAULT_LOCATION_NAME = os.environ.get("DEFAULT_LOCATION_NAME", "New York")  # H
 
 GROQ_API_KEY          = os.environ.get("GROQ_API_KEY", "")            # From console.groq.com
 GROQ_MODEL            = "llama-3.3-70b-versatile"
+TMDB_API_KEY          = os.environ.get("TMDB_API_KEY", "")            # From themoviedb.org/settings/api
 
 # ── Weather codes ─────────────────────────────────────────────────────────────
 WEATHER_CODES = {
@@ -1004,10 +1005,10 @@ def create_calendar_event_zapier(query):
 JARVIS_INSTRUCTIONS = (
     "You are JARVIS, the highly intelligent and formal AI assistant from the Iron Man "
     "and Avengers films. Respond with a refined British manner. "
-    "Always use 'sir' exactly once per response as a direct address — place it at the end "
-    "of a complete sentence (e.g. '...at noon, sir.') or after a comma before a new clause "
-    "(e.g. 'Very well, sir, your lunch has been scheduled.'). Never place 'sir' in a position "
-    "that breaks grammatical flow or splits a noun phrase. "
+    "Use 'sir' only when it sounds natural — not in every response. "
+    "If the sentence flows well without it, omit it. When you do use it, place it at the end "
+    "of a sentence or after a comma before a new clause. Never force it into a position that "
+    "feels awkward or breaks the flow. "
     "Every sentence must be grammatically complete and correct. "
     "Keep replies concise — two sentences at most. Never mention being an AI or a language model. "
     "CRITICAL: Never invent, fabricate, or assume real-world facts such as calendar events, emails, "
@@ -1015,13 +1016,22 @@ JARVIS_INSTRUCTIONS = (
     "If no data is provided, say you do not have that information."
 )
 
-def get_groq_response(user_text):
-    """Call Groq API with Jarvis system prompt. Returns text or None."""
+_JARVIS_KNOWLEDGE_SUFFIX = (
+    " Answer from your training knowledge. For time-sensitive topics, give the most recent "
+    "information you have and briefly note it may not reflect the very latest."
+)
+
+def get_groq_response(user_text, allow_knowledge=False):
+    """Call Groq API with Jarvis system prompt. Returns text or None.
+    allow_knowledge=True: permits answering from training data (general queries).
+    allow_knowledge=False: strict mode — only report provided data (weather/calendar/email).
+    """
     import urllib.request, urllib.error, json as _json
+    system = JARVIS_INSTRUCTIONS + (_JARVIS_KNOWLEDGE_SUFFIX if allow_knowledge else "")
     payload = _json.dumps({
         "model": GROQ_MODEL,
         "messages": [
-            {"role": "system", "content": JARVIS_INSTRUCTIONS},
+            {"role": "system", "content": system},
             {"role": "user",   "content": user_text},
         ],
         "max_tokens": 150,
@@ -1045,10 +1055,147 @@ def get_groq_response(user_text):
         return None
 
 
+# ── TMDB movies ───────────────────────────────────────────────────────────────
+def fetch_movies_tmdb(query):
+    """Fetch recent movies for an actor/director via TMDB API."""
+    if not TMDB_API_KEY:
+        return None
+    import urllib.request, urllib.error, json as _json, datetime as _dt
+
+    # Extract person name + role using Groq 8b
+    extract_payload = _json.dumps({
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content":
+                "Extract the person's name from the movie query and normalize it to the correct full name — fix spelling, phonetic errors, and missing spaces (e.g. 'shahrukh khan' → 'Shah Rukh Khan', 'tomhanks' → 'Tom Hanks', 'matt demon' → 'Matt Damon', 'leo decaprio' → 'Leonardo DiCaprio'). Reply ONLY with valid JSON.\n"
+                "Format: {\"name\": \"Full Name\", \"role\": \"actor\" or \"director\"}\n"
+                "If no person name found, return {\"name\": null, \"role\": null}"},
+            {"role": "user", "content": query},
+        ],
+        "max_tokens": 50,
+        "temperature": 0,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=extract_payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "User-Agent": "Mozilla/5.0",
+        },
+    )
+    person_name = None
+    role = "actor"
+    try:
+        resp = urllib.request.urlopen(req, timeout=10)
+        raw = _json.loads(resp.read())["choices"][0]["message"]["content"].strip()
+        # Strip markdown code fences if Groq wrapped the JSON
+        if "```" in raw:
+            import re as _re
+            m = _re.search(r'\{.*?\}', raw, _re.DOTALL)
+            raw = m.group(0) if m else raw
+        parsed = _json.loads(raw)
+        person_name = parsed.get("name")
+        role = (parsed.get("role") or "actor").lower()
+        print(f"TMDB extracted: name={person_name}, role={role}")
+    except Exception as e:
+        print(f"TMDB name extract error: {e}")
+
+    if not person_name:
+        return None
+
+    # Search TMDB for person
+    try:
+        search_url = (
+            f"https://api.themoviedb.org/3/search/person"
+            f"?query={urllib.parse.quote(person_name)}&api_key={TMDB_API_KEY}"
+        )
+        results = _json.loads(urllib.request.urlopen(search_url, timeout=8).read())
+        if not results.get("results"):
+            return f"Couldn't find anyone named '{person_name}' on TMDB."
+        candidates = results["results"][:5]
+        # Filter by department first (actor → Acting, director → Directing), then pick most popular
+        dept = "Directing" if role == "director" else "Acting"
+        dept_matches = [p for p in candidates if p.get("known_for_department") == dept]
+        pool = dept_matches if dept_matches else candidates
+        person = max(pool, key=lambda p: p.get("popularity", 0))
+        person_id = person["id"]
+        person_name_official = person["name"]
+        print(f"TMDB person: {person_name_official} (dept={person.get('known_for_department')}, popularity={person.get('popularity')})")
+    except Exception as e:
+        print(f"TMDB search error: {e}")
+        return None
+
+    # Get movie credits
+    try:
+        credits_url = (
+            f"https://api.themoviedb.org/3/person/{person_id}/movie_credits"
+            f"?api_key={TMDB_API_KEY}"
+        )
+        credits = _json.loads(urllib.request.urlopen(credits_url, timeout=8).read())
+    except Exception as e:
+        print(f"TMDB credits error: {e}")
+        return None
+
+    today = _dt.date.today().isoformat()
+
+    def _is_real_movie(m):
+        """Exclude interview specials, documentaries, TV shorts.
+        Cast entries have vote_count; crew entries often don't — use popularity as fallback."""
+        if not (m.get("release_date") and m["release_date"] <= today):
+            return False
+        if "vote_count" in m:
+            return m["vote_count"] >= 10
+        return m.get("popularity", 0) > 1
+
+    if role == "director":
+        movies = [m for m in credits.get("crew", [])
+                  if m.get("job") == "Director" and _is_real_movie(m)]
+        if not movies:
+            movies = [m for m in credits.get("cast", []) if _is_real_movie(m)]
+    else:
+        movies = [m for m in credits.get("cast", []) if _is_real_movie(m)]
+        if not movies:
+            movies = [m for m in credits.get("crew", [])
+                      if m.get("job") == "Director" and _is_real_movie(m)]
+    movies.sort(key=lambda m: m["release_date"], reverse=True)
+    movies = movies[:5]
+
+    if not movies:
+        return f"No released movies found for {person_name_official}."
+
+    def _fmt_money(n):
+        if not n:
+            return None
+        if n >= 1_000_000_000:
+            return f"${n / 1_000_000_000:.1f}B"
+        return f"${n / 1_000_000:.0f}M"
+
+    lines = [f"Recent movies — {person_name_official}:"]
+    for m in movies:
+        year = m["release_date"][:4]
+        try:
+            detail_url = f"https://api.themoviedb.org/3/movie/{m['id']}?api_key={TMDB_API_KEY}"
+            detail = _json.loads(urllib.request.urlopen(detail_url, timeout=5).read())
+            budget  = _fmt_money(detail.get("budget"))
+            revenue = _fmt_money(detail.get("revenue"))
+            extras = []
+            if budget:  extras.append(f"Budget: {budget}")
+            if revenue: extras.append(f"Box office: {revenue}")
+            extra_str = " · ".join(extras)
+            line = f"• {m['title']} ({year})"
+            if extra_str:
+                line += f" — {extra_str}"
+        except Exception:
+            line = f"• {m['title']} ({year})"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 # ── Intent classification ─────────────────────────────────────────────────────
 _INTENT_CATEGORIES = {
     "reminder", "weather", "time", "email",
-    "calendar_find", "calendar_create", "nearby", "nutrition", "general"
+    "calendar_find", "calendar_create", "nearby", "nutrition", "movies", "general"
 }
 
 def _keyword_fallback(text):
@@ -1064,6 +1211,8 @@ def _keyword_fallback(text):
         return "nearby"
     if any(w in tl for w in ("calorie", "calories", "macro", "macros", "protein", "carb", "carbs", "nutrition", "fat in", "how much fat", "how many calories")):
         return "nutrition"
+    if any(w in tl for w in ("movie", "film", "actor", "actress", "director", "starring", "filmography", "latest film", "recent film", "new film")):
+        return "movies"
     return "general"
 
 def classify_intent(text):
@@ -1082,6 +1231,7 @@ def classify_intent(text):
         "calendar_create — creating, adding, booking, or scheduling a new event\n"
         "nearby — finding nearby places: restaurants, cafes, bars, pharmacies, hospitals, shops, etc.\n"
         "nutrition — calories, macros, protein, fat, carbs, or nutrition info for any food\n"
+        "movies — latest, recent, or filmography of an actor or director; movie release queries\n"
         "general — anything else\n\n"
         "location: the specific city or place explicitly mentioned, or null if none. "
         "Do not infer locations from context (e.g. 'a walk', 'a trip', 'outside' are not locations)."
