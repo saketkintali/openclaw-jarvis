@@ -2,39 +2,21 @@
 
 Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
 
-## What Goes Here
+## Agent Roles
 
-Things like:
+The user can invoke specialized AI agents using short prefixes. When you see these patterns, call the corresponding MCP tool immediately — do NOT answer the question yourself.
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
+| Prefix | Tool | Agent |
+|--------|------|-------|
+| `em:` or `engineering manager:` | `run_engineering_manager` | Engineering Manager — decomposes requirements into task packets |
+| `arch:` or `architect:` | `run_architect` | Architect — designs systems, data models, API contracts |
+| `dev:` or `senior dev:` | `run_senior_dev` | Senior Developer — implements features and APIs |
+| `jr:` or `junior dev:` | `run_junior_dev` | Junior Developer — tests, docs, small tasks |
 
-## Examples
+### Examples
+- `em: how to create instagram?` → call `run_engineering_manager("how to create instagram?")`
+- `arch: design a notifications system` → call `run_architect("design a notifications system")`
+- `dev: add a delete endpoint to the reminders API` → call `run_senior_dev("add a delete endpoint to the reminders API")`
+- `jr: write tests for the storage module` → call `run_junior_dev("write tests for the storage module")`
 
-```markdown
-### Cameras
-
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
-
-### SSH
-
-- home-server → 192.168.1.100, user: admin
-
-### TTS
-
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
-```
-
-## Why Separate?
-
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
-
----
-
-Add whatever helps you do your job. This is your cheat sheet.
+You can also trigger these with natural language like "use the engineering manager to..." or "ask the architect to...".

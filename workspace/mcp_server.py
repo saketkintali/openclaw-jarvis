@@ -48,5 +48,50 @@ def get_due_reminders() -> str:
     return result or "No reminders are due right now."
 
 
+@mcp.tool()
+def speak(text: str) -> str:
+    """Send a voice message to the user on WhatsApp. Call this when the user asks you to speak, say, read aloud, or wants an audio response."""
+    from jarvis import send_whatsapp_audio
+    success = send_whatsapp_audio(text)
+    return "Voice message sent." if success else "Could not send voice message — replied as text instead."
+
+
+_AGENT_ROLES_DIR = Path(__file__).parent / "ai-learning" / "agent-roles"
+
+
+def _run_role(role_file: str, task: str) -> str:
+    from jarvis import get_ai_response
+    prompt_path = _AGENT_ROLES_DIR / role_file
+    if not prompt_path.exists():
+        return f"Role file not found: {role_file}"
+    instructions = prompt_path.read_text(encoding="utf-8")
+    result = get_ai_response(task, instructions=instructions)
+    return result or "No response from agent."
+
+
+@mcp.tool()
+def run_engineering_manager(requirement: str) -> str:
+    """Invoke the Engineering Manager (Alex) to decompose a product requirement into task packets for the team. Pass the full feature or project requirement."""
+    return _run_role("engineering-manager.prompt.md", requirement)
+
+
+@mcp.tool()
+def run_architect(task: str) -> str:
+    """Invoke the Architect to design a system — data models, API contracts, component structure — before any code is written. Pass the feature or system to design."""
+    return _run_role("architect.prompt.md", task)
+
+
+@mcp.tool()
+def run_senior_dev(task: str) -> str:
+    """Invoke the Senior Developer to implement a feature or API. Pass the task description and any relevant context (file paths, acceptance criteria)."""
+    return _run_role("senior-dev.prompt.md", task)
+
+
+@mcp.tool()
+def run_junior_dev(task: str) -> str:
+    """Invoke the Junior Developer for tests, docs, small bug fixes, or well-defined tasks. Pass the specific task."""
+    return _run_role("junior-dev.prompt.md", task)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

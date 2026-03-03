@@ -1,6 +1,6 @@
 # OpenClaw Jarvis
 
-A personal WhatsApp AI assistant (Jarvis) powered by [OpenClaw](https://openclaw.ai) and Claude (Anthropic). Talk to it by text or voice and it handles your day — checking weather and time worldwide, reading Gmail, managing Google Calendar, finding places nearby, looking up movies and actors, answering nutrition questions, setting reminders, and answering general questions. Uses Claude Sonnet as the native agent, Zapier MCP for Gmail and Google Calendar, OpenStreetMap for nearby search, TMDB for movie data, and local speech-to-text for voice messages.
+A personal WhatsApp AI assistant (Jarvis) powered by [OpenClaw](https://openclaw.ai) and Claude (Anthropic). Talk to it by text or voice and it handles your day — checking weather and time worldwide, reading Gmail, managing Google Calendar, finding places nearby, looking up movies and actors, answering nutrition questions, setting reminders, and answering general questions. Also ships a multi-agent dev team you can invoke from WhatsApp (`em:`, `arch:`, `dev:`, `jr:`). Uses Claude Sonnet as the native agent, Zapier MCP for Gmail and Google Calendar, OpenStreetMap for nearby search, TMDB for movie data, and local speech-to-text for voice messages.
 
 ---
 
@@ -20,6 +20,11 @@ Send a WhatsApp message (text or voice) to your OpenClaw number. Claude classifi
 | Nutrition | "how many calories in a banana?" / "macros in chicken breast" | Claude from knowledge |
 | Movies | "latest movies of Tom Hanks" / "films directed by Nolan" | TMDB API → formatted list |
 | General | anything else | Claude answers directly |
+| Voice reply | "tell me a joke aloud" | `check_speak.py` strips keyword → Claude answers → edge-tts voice note |
+| Agent: EM | `em: design a habit tracker` | Engineering Manager decomposes into task packets |
+| Agent: Architect | `arch: design a notifications system` | Architect produces DESIGN.md + data models |
+| Agent: Senior Dev | `dev: add a delete endpoint` | Senior Dev implements the feature |
+| Agent: Junior Dev | `jr: write tests for the storage module` | Junior Dev writes tests + docs |
 
 See `workspace/DIAGRAM.txt` for the full architecture.
 
@@ -106,12 +111,16 @@ OpenClaw runs Claude (claude-sonnet-4-6) as its native agent. When a WhatsApp me
 
 **Two MCP tool servers give Claude real-world data:**
 
-- **jarvis-tools** (`mcp_server.py`, runs locally via stdio) — weather, time, movies, nearby places, reminders
+- **jarvis-tools** (`mcp_server.py`, runs locally via stdio) — weather, time, movies, nearby places, reminders, voice output, and agent role invocation
 - **Zapier MCP** — Gmail and Google Calendar (configured in `config/mcporter.json`)
 
 **The Jarvis persona** comes from the workspace markdown files (`SOUL.md`, `AGENTS.md`, `IDENTITY.md`, etc.) that OpenClaw loads as the agent's system prompt automatically.
 
 **Voice messages** go through a separate path: the `audio-transcribe` hook calls `check_audio.py`, which transcribes the audio using faster-whisper, then sends the transcript to Claude via the OpenClaw gateway API. Claude responds with text, which `check_audio.py` converts to an audio reply via edge-tts.
+
+**Audio-on-demand** — when a text message contains "aloud", "out loud", "say it", etc., `check_speak.py` strips the keyword, gets Claude's response, and sends it back as a voice note via edge-tts. Claude itself replies `NO_REPLY` to avoid a duplicate text bubble.
+
+**Multi-agent dev team** — `workspace/ai-learning/agent-roles/` contains system prompts for four roles: Engineering Manager, Architect, Senior Dev, Junior Dev. Each is exposed as an MCP tool (`run_engineering_manager`, `run_architect`, etc.) and triggered from WhatsApp via short prefixes (`em:`, `arch:`, `dev:`, `jr:`).
 
 `heartbeat.py` runs every ~30 minutes via Windows Task Scheduler to fire due reminders.
 
