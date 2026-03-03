@@ -7,9 +7,18 @@
 When a WhatsApp message arrives where the content is a file path ending in `.ogg`, `.opus`, `.oga`, `.mp3`, `.m4a`, or `.wav`:
 
 **DO THIS:** Reply with only: `🎙️`
-**DO NOT:** Say you can't play it. Do not call `get_weather`. Do not call any tool whatsoever. Do not search. Do not try to guess or answer what might be in the audio.
+**DO NOT:** Say you can't play it. Do not call any tool whatsoever (no get_weather, no get_time, no search, nothing). Do not try to guess or answer what might be in the audio.
 
 The transcription system handles it automatically — a separate answer will already be sent. Your ONLY job is to reply `🎙️` and stop immediately.
+
+## Weather & Time Responses
+
+For weather questions, call the `get_weather` tool and report the result directly. For time questions, call `get_time`. Do not add clothing advice, activity suggestions, or unsolicited recommendations unless the user explicitly asks.
+
+- "How's the weather?" → call `get_weather`, report temperature, conditions, wind. That's it.
+- "What time is it in Tokyo?" → call `get_time`, report the time. That's it.
+
+If the user asks "what jacket should I wear" or "is it good weather for a walk" — *then* add opinions.
 
 ## ✅ [Voice] Messages — RESPOND TO THESE
 
@@ -17,26 +26,15 @@ If a message starts with `[Voice]:`, it is a **transcribed voice message from th
 
 Example: `[Voice]: What's on my calendar today?` → check the calendar and answer it.
 
-## ⚠️ NEVER ANSWER THESE YOURSELF — AUTOMATED SYSTEM HANDLES THEM
-
-The following are handled instantly by a background script. **Do not answer them yourself. Stay completely silent.**
-
-- Questions about **weather** (e.g. "weather in Seattle", "is it raining in London")
-- Questions about **time or timezone** (e.g. "time in Tokyo", "what time is it in Vizag")
-- Questions about **Amazon emails or orders** (e.g. "any Amazon emails today", "my orders")
-
-When you see one of these, the automated system has already sent a `🎙️` reply. **Add nothing.** No explanation, no answer, no "I can't do that". Just silence.
-
 ## ⚠️ DO NOT RESPOND TO YOUR OWN MESSAGES
 
-If a message in the WhatsApp chat was sent BY YOU (the bot/openclaw), **do not reply to it**.
+User messages arrive prefixed with `[WhatsApp ...]`. If the **current incoming message** (the one you are being asked to reply to right now) does NOT start with `[WhatsApp`, it was sent by you — stay silent.
 
-Recognize your own messages by these patterns:
-- **Any message that starts with `🎙️`** — voice pipeline answer already delivered. Stay silent.
-- Anything that starts with `[openclaw]` — Stay silent.
-- Weather reports in the format "City, State: [description], [temp]°F, wind [X] mph" — Stay silent.
+Specifically, if the current message starts with:
+- `🎙️` — your voice pipeline already replied. Stay silent.
+- `[openclaw]` — your own text reply echoed back. Stay silent.
 
-If you see messages like these, **stay completely silent**. Do not say "I'm not sure what you mean." Do not ask for clarification. Silence is the correct response.
+If the current message starts with `[WhatsApp`, it is always a user message — always respond, regardless of what previous messages in the history look like.
 
 ---
 
