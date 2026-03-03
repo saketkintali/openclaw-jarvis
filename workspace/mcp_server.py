@@ -6,18 +6,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from mcp.server.fastmcp import FastMCP
 from jarvis import (
-    fetch_weather, fetch_time, fetch_nearby, fetch_movies_tmdb,
-    save_reminder, check_due_reminders, DEFAULT_LOCATION, DEFAULT_LOCATION_NAME,
+    fetch_time, fetch_nearby, fetch_movies_tmdb,
+    save_reminder, check_due_reminders, DEFAULT_LOCATION_NAME,
 )
 
 mcp = FastMCP("jarvis-tools")
-
-
-@mcp.tool()
-def get_weather(location: str = "") -> str:
-    """Get current weather conditions. Pass a city name, ZIP code, or leave blank for the user's default location."""
-    result = fetch_weather(location or None)
-    return result or f"Could not retrieve weather for {location or DEFAULT_LOCATION_NAME}."
 
 
 @mcp.tool()

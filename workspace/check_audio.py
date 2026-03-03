@@ -10,8 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
-    send_whatsapp, send_whatsapp_audio,
-    WHATSAPP_TARGET, get_ai_response,
+    send_whatsapp, send_whatsapp_audio, get_ai_response,
 )
 
 MEDIA_DIR  = Path(os.environ.get("USERPROFILE", ".")) / ".openclaw" / "media" / "inbound"
