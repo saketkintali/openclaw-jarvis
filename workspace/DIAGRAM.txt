@@ -31,32 +31,21 @@
 ║                                                                              ║
 ║  Claude reads the message, decides what tool (if any) to call, calls it,   ║
 ║  gets the result, and composes a Jarvis-style reply.                         ║
-╚══╤═════════╤══════════════╤═══════════════╤══════════════╤═══════════════════╝
-   │         │              │               │              │
-   ▼         ▼              ▼               ▼              ▼
-JARVIS-TOOLS MCP SERVER (mcp_server.py — stdio, started by OpenClaw)
-   │         │              │               │              │
-┌──┴──┐  ┌───┴───┐  ┌───────┴──────┐  ┌────┴─────┐  ┌────┴──────┐
-│get_ │  │get_   │  │get_movies()  │  │find_     │  │set_/get_  │
-│weath│  │time() │  │→ TMDB API    │  │nearby()  │  │reminder() │
-│er() │  │→ world│  │  search by   │  │→ Overpass│  │→ local    │
-│→ op-│  │  time │  │  actor /     │  │  API     │  │  remind-  │
-│ enm-│  │  REST │  │  director,   │  │  (Open-  │  │  ers.json │
-│ eteo│  │  API  │  │  returns     │  │  Street- │  │           │
-│ API │  │       │  │  titles +    │  │  Map)    │  │           │
-│     │  │       │  │  budget/box  │  │  up to 3 │  │           │
-│curr.│  │       │  │  office      │  │  results │  │           │
-│+ hr.│  │       │  │              │  │  + dist. │  │           │
-└─────┘  └───────┘  └──────────────┘  └──────────┘  └───────────┘
-
-                    ZAPIER MCP SERVER (config/mcporter.json)
-                              │              │
-                        ┌─────┴────┐   ┌─────┴────────┐
-                        │ Gmail    │   │ Google       │
-                        │ Find     │   │ Calendar     │
-                        │ Email    │   │ Find Events  │
-                        │ tool     │   │ Quick Add    │
-                        └──────────┘   └──────────────┘
+╚══╤══════════════╤═════════════╤═══════════════╤══════════════════════════════╝
+   │              │             │               │
+   ▼              ▼             ▼               ▼
+NATIVE PLUGIN   JARVIS-TOOLS MCP SERVER      ZAPIER MCP SERVER
+(openclaw-web-  (mcp_server.py — stdio,      (config/mcporter.json)
+ search plugin)  started by OpenClaw)
+   │              │     │     │     │           │             │
+┌──┴──────┐  ┌────┴──┐ ┌┴────┐┌────┴────┐┌────┴─────┐ ┌─────┴────┐ ┌──────────┐
+│get_     │  │get_   │ │get_ ││find_    ││set_/get_ │ │ Gmail    │ │ Google   │
+│weather()│  │time() │ │movi-││nearby() ││reminder()│ │ Find     │ │ Calendar │
+│→ open-  │  │→ world│ │es() ││→ Overp. ││→ local   │ │ Email    │ │ Find /   │
+│  meteo  │  │  time │ │→TMDb││  API    ││  remind- │ │ tool     │ │ Quick Add│
+│  API    │  │  REST │ │  API││  (OSM)  ││  ers.json│ │          │ │          │
+│curr.+hr.│  │       │ │     ││up to 3  ││          │ │          │ │          │
+└─────────┘  └───────┘ └─────┘└─────────┘└──────────┘ └──────────┘ └──────────┘
 
             GENERAL / NUTRITION (no tool call)
             Claude answers directly from training knowledge.
@@ -104,17 +93,17 @@ JARVIS-TOOLS MCP SERVER (mcp_server.py — stdio, started by OpenClaw)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  INTENT ROUTING  (handled natively by Claude — no classify_intent() needed)
+  TOOL SOURCES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Weather       → Claude calls get_weather(location)
-  Time          → Claude calls get_time(location)
-  Movies        → Claude calls get_movies(query)
-  Nearby        → Claude calls find_nearby(query, location)
-  Reminder set  → Claude calls set_reminder(task, remind_at)
-  Reminder check→ Claude calls get_due_reminders()
-  Email         → Claude calls Zapier find_email tool
-  Calendar find → Claude calls Zapier find_calendar_events tool
-  Calendar add  → Claude calls Zapier quick_add_event tool
-  Nutrition     → Claude answers from knowledge (no tool call)
-  General       → Claude answers from knowledge (no tool call)
+  get_weather       → openclaw-web-search plugin (native, always available)
+  get_time          → jarvis-tools MCP (mcp_server.py via mcporter)
+  get_movies        → jarvis-tools MCP (mcp_server.py via mcporter)
+  find_nearby       → jarvis-tools MCP (mcp_server.py via mcporter)
+  set_reminder      → jarvis-tools MCP (mcp_server.py via mcporter)
+  get_due_reminders → jarvis-tools MCP (mcp_server.py via mcporter)
+  Email             → Zapier MCP (find_email tool via mcporter)
+  Calendar find     → Zapier MCP (find_calendar_events tool via mcporter)
+  Calendar add      → Zapier MCP (quick_add_event tool via mcporter)
+  Nutrition         → Claude answers from training knowledge (no tool)
+  General           → Claude answers from training knowledge (no tool)
