@@ -11,17 +11,26 @@
           Voice message                    Text message
                 │                               │
                 ▼                               │
-  ┌─────────────────────────┐                   │
-  │  audio-transcribe hook  │                   │
-  │  → check_audio.py       │                   │
-  │    transcribe_audio()   │                   │
-  │    → transcribe.py      │                   │
-  │    (faster-whisper,     │                   │
-  │     tiny model, CPU)    │                   │
-  │    → transcript text    │                   │
-  └──────────┬──────────────┘                   │
-             │ get_ai_response(transcript)       │
-             └─────────────────┬─────────────────┘
+  ┌─────────────────────────┐◄──────────────────┘
+  │  audio-transcribe hook  │
+  │  (fires on ALL messages)│
+  │                         │
+  │  ┌─────────────────┐    │  voice path: transcribe → get_ai_response → audio reply
+  │  │ check_audio.py  │    │
+  │  │ transcribe_audio│    │
+  │  │ → transcribe.py │    │
+  │  │ (faster-whisper)│    │
+  │  └─────────────────┘    │
+  │                         │
+  │  ┌─────────────────┐    │  "aloud/out loud/say it" path:
+  │  │ check_speak.py  │    │  strips keyword → get_ai_response → voice note
+  │  │ detects audio   │    │
+  │  │ keywords in     │    │
+  │  │ text messages   │    │
+  │  └─────────────────┘    │
+  └──────────┬──────────────┘
+             │ get_ai_response(text)
+             └─────────────────┬─────────────────┐
                                │
 ╔══════════════════════════════▼═══════════════════════════════════════════════╗
 ║            CLAUDE NATIVE AGENT  (claude-sonnet-4-6)                         ║
@@ -52,16 +61,21 @@ NATIVE PLUGIN   JARVIS-TOOLS MCP SERVER      ZAPIER MCP SERVER
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  REPLY PATH
+  REPLY PATHS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Text message reply:
     Claude → response text → OpenClaw → WhatsApp
 
-  Voice message reply:
-    Claude → response text → check_audio.py
-      → send_whatsapp_audio() → edge-tts → OGG file → WhatsApp
+  Voice message reply (user sends audio):
+    check_audio.py → transcribe → get_ai_response(transcript) → Claude
+      → send_whatsapp_audio() → edge-tts → OGG → WhatsApp
       → (fallback to text if TTS fails)
+
+  Audio-on-demand ("tell me a joke aloud"):
+    check_speak.py strips "aloud" → get_ai_response("tell me a joke")
+      → Claude answers → send_whatsapp_audio() → edge-tts → OGG → WhatsApp
+    Claude main session: sees "aloud" → replies NO_REPLY (silenced)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -84,6 +98,7 @@ NATIVE PLUGIN   JARVIS-TOOLS MCP SERVER      ZAPIER MCP SERVER
   jarvis.py            ← shared utility: fetch functions, TTS, gateway API, constants
   mcp_server.py        ← FastMCP stdio server; wraps jarvis.py tools for Claude
   check_audio.py       ← voice pipeline: lock, state, transcribe, call gateway
+  check_speak.py       ← text-to-audio: detects "aloud" keywords, sends voice note
   heartbeat.py         ← fires due reminders (Task Scheduler, every ~30 min)
   transcribe.py        ← faster-whisper wrapper (called as subprocess)
   config/mcporter.json ← Zapier MCP + local jarvis-tools MCP endpoints

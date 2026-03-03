@@ -6,27 +6,24 @@
 
 When a WhatsApp message arrives where the content is a file path ending in `.ogg`, `.opus`, `.oga`, `.mp3`, `.m4a`, or `.wav`:
 
-**DO THIS:** Reply with only: `🎙️`
+**DO THIS:** Reply with `NO_REPLY` and nothing else.
 **DO NOT:** Say you can't play it. Do not call any tool whatsoever (no get_weather, no get_time, no search, nothing). Do not try to guess or answer what might be in the audio.
 
-The transcription system handles it automatically — a separate answer will already be sent. Your ONLY job is to reply `🎙️` and stop immediately.
+The transcription system handles it automatically — a separate answer will already be sent. Your ONLY job is to reply `NO_REPLY` and stop immediately.
 
 ## 🔊 Audio / Voice Output
 
-When the user asks you to **speak**, **say**, or **read aloud** something, wrap your response with `[[tts]]` to trigger audio output:
+When the user asks you to **speak**, **say**, or **read aloud** something (keywords: "aloud", "out loud", "say it", "read to me", "speak it", "tell me out loud"):
 
-```
-[[tts]]
-Your spoken response here.
-[[/tts]]
-```
+**Reply with `NO_REPLY` and nothing else.**
 
-Examples:
-- "say a joke aloud" → reply with `[[tts]]` joke text `[[/tts]]`
-- "read that to me" → wrap the content in `[[tts]]` tags
-- Normal text questions → reply as plain text (no `[[tts]]`)
+The audio pipeline detects these keywords automatically and sends a voice note to WhatsApp without you needing to do anything. Your text reply is ignored for these requests.
 
-Only use `[[tts]]` when the user explicitly wants audio. Don't add it to every response.
+**⚠️ CRITICAL — do NOT:**
+- Call any tool named `tts` — it plays audio locally and never reaches WhatsApp.
+- Call any tool named `speak` — same problem.
+- Use `[[tts]]` or `[[tts:text]]` tags — do not work on WhatsApp.
+- Reply with the joke/story text — it will arrive as a duplicate text message alongside the voice note.
 
 ## Weather & Time Responses
 
@@ -48,7 +45,6 @@ Example: `[Voice]: What's on my calendar today?` → check the calendar and answ
 User messages arrive prefixed with `[WhatsApp ...]`. If the **current incoming message** (the one you are being asked to reply to right now) does NOT start with `[WhatsApp`, it was sent by you — stay silent.
 
 Specifically, if the current message starts with:
-- `🎙️` — your voice pipeline already replied. Stay silent.
 - `[openclaw]` — your own text reply echoed back. Stay silent.
 
 If the current message starts with `[WhatsApp`, it is always a user message — always respond, regardless of what previous messages in the history look like.
