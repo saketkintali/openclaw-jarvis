@@ -46,15 +46,15 @@
 NATIVE PLUGIN   JARVIS-TOOLS MCP SERVER      ZAPIER MCP SERVER
 (openclaw-web-  (mcp_server.py — stdio,      (config/mcporter.json)
  search plugin)  started by OpenClaw)
-   │              │     │     │     │           │             │
-┌──┴──────┐  ┌────┴──┐ ┌┴────┐┌────┴────┐┌────┴─────┐ ┌─────┴────┐ ┌──────────┐
-│get_     │  │get_   │ │get_ ││find_    ││set_/get_ │ │ Gmail    │ │ Google   │
-│weather()│  │time() │ │movi-││nearby() ││reminder()│ │ Find     │ │ Calendar │
-│→ open-  │  │→ world│ │es() ││→ Overp. ││→ local   │ │ Email    │ │ Find /   │
-│  meteo  │  │  time │ │→TMDb││  API    ││  remind- │ │ tool     │ │ Quick Add│
-│  API    │  │  REST │ │  API││  (OSM)  ││  ers.json│ │          │ │          │
-│curr.+hr.│  │       │ │     ││up to 3  ││          │ │          │ │          │
-└─────────┘  └───────┘ └─────┘└─────────┘└──────────┘ └──────────┘ └──────────┘
+   │              │     │     │     │     │     │       │             │
+┌──┴──────┐  ┌────┴──┐ ┌┴────┐┌────┴──┐┌┴──────┐┌──┴──────┐ ┌─────┴────┐ ┌──────────┐
+│get_     │  │get_   │ │get_ ││find_  ││set_/  ││speak() │ │ Gmail    │ │ Google   │
+│weather()│  │time() │ │movi-││nearby ││get_   ││run_em()│ │ Find     │ │ Calendar │
+│→ open-  │  │→ world│ │es() ││()     ││remind-││run_    │ │ Email    │ │ Find /   │
+│  meteo  │  │  time │ │→TMDb││→ OSM  ││er()   ││arch()  │ │ tool     │ │ Quick Add│
+│  API    │  │  REST │ │  API││Overp. ││→local ││run_dev │ │          │ │          │
+│curr.+hr.│  │       │ │     ││up to 3││remind-││run_jr()│ │          │ │          │
+└─────────┘  └───────┘ └─────┘└───────┘└───────┘└────────┘ └──────────┘ └──────────┘
 
             GENERAL / NUTRITION (no tool call)
             Claude answers directly from training knowledge.
@@ -111,14 +111,47 @@ NATIVE PLUGIN   JARVIS-TOOLS MCP SERVER      ZAPIER MCP SERVER
   TOOL SOURCES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  get_weather       → openclaw-web-search plugin (native, always available)
-  get_time          → jarvis-tools MCP (mcp_server.py via mcporter)
-  get_movies        → jarvis-tools MCP (mcp_server.py via mcporter)
-  find_nearby       → jarvis-tools MCP (mcp_server.py via mcporter)
-  set_reminder      → jarvis-tools MCP (mcp_server.py via mcporter)
-  get_due_reminders → jarvis-tools MCP (mcp_server.py via mcporter)
-  Email             → Zapier MCP (find_email tool via mcporter)
-  Calendar find     → Zapier MCP (find_calendar_events tool via mcporter)
-  Calendar add      → Zapier MCP (quick_add_event tool via mcporter)
-  Nutrition         → Claude answers from training knowledge (no tool)
-  General           → Claude answers from training knowledge (no tool)
+  get_weather            → openclaw-web-search plugin (native, always available)
+  get_time               → jarvis-tools MCP (mcp_server.py via mcporter)
+  get_movies             → jarvis-tools MCP (mcp_server.py via mcporter)
+  find_nearby            → jarvis-tools MCP (mcp_server.py via mcporter)
+  set_reminder           → jarvis-tools MCP (mcp_server.py via mcporter)
+  get_due_reminders      → jarvis-tools MCP (mcp_server.py via mcporter)
+  speak                  → jarvis-tools MCP → edge-tts → OGG → WhatsApp audio
+  run_engineering_manager→ jarvis-tools MCP → OpenClaw /v1/responses (EM system prompt)
+  run_architect          → jarvis-tools MCP → OpenClaw /v1/responses (Architect system prompt)
+  run_senior_dev         → jarvis-tools MCP → OpenClaw /v1/responses (Senior Dev system prompt)
+  run_junior_dev         → jarvis-tools MCP → OpenClaw /v1/responses (Junior Dev system prompt)
+  Email                  → Zapier MCP (find_email tool via mcporter)
+  Calendar find          → Zapier MCP (find_calendar_events tool via mcporter)
+  Calendar add           → Zapier MCP (quick_add_event tool via mcporter)
+  Nutrition              → Claude answers from training knowledge (no tool)
+  General                → Claude answers from training knowledge (no tool)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  AGENT ROLES  (WhatsApp prefix → MCP tool → role system prompt)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "em: build a habit tracker"
+    Claude calls run_engineering_manager(requirement)
+      → reads ai-learning/agent-roles/engineering-manager.prompt.md
+      → POST /v1/responses with that system prompt + user requirement
+      → Alex (EM) replies with task packets for Architect / Senior Dev / Junior Dev
+
+  "arch: design a notifications system"
+    Claude calls run_architect(task)
+      → reads ai-learning/agent-roles/architect.prompt.md
+      → Jordan (Architect) replies with DESIGN.md blueprint, data models, API surface
+
+  "dev: add a delete endpoint"
+    Claude calls run_senior_dev(task)
+      → reads ai-learning/agent-roles/senior-dev.prompt.md
+      → Sam (Senior Dev) implements the feature
+
+  "jr: write tests for the storage module"
+    Claude calls run_junior_dev(task)
+      → reads ai-learning/agent-roles/junior-dev.prompt.md
+      → Jamie (Junior Dev) writes tests + docs
+
+  Role files: workspace/ai-learning/agent-roles/*.prompt.md
