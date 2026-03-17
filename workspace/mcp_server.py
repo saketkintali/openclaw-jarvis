@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Jarvis MCP tool server — exposes data-fetching tools to Claude via stdio MCP."""
+import os
+import subprocess
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
+
+_WORKSPACE = Path(__file__).parent
 
 from mcp.server.fastmcp import FastMCP
 from jarvis import (
@@ -56,7 +60,53 @@ def speak(text: str) -> str:
     return "Voice message sent." if success else "Could not send voice message — replied as text instead."
 
 
-_AGENT_ROLES_DIR = Path(__file__).parent / "ai-learning" / "agent-roles"
+_AGENT_ROLES_DIR = Path(os.environ.get("AGENT_ROLES_DIR", str(_WORKSPACE / "ai-learning" / "agent-roles")))
+
+
+# ── File system tools (for agent roles to read/write/run) ─────────────────────
+
+@mcp.tool()
+def read_file(path: str) -> str:
+    """Read a file. Path can be absolute or relative to the workspace directory."""
+    p = Path(path) if Path(path).is_absolute() else _WORKSPACE / path
+    if not p.exists():
+        return f"File not found: {p}"
+    try:
+        return p.read_text(encoding="utf-8")
+    except Exception as e:
+        return f"Error reading file: {e}"
+
+
+@mcp.tool()
+def write_file(path: str, content: str) -> str:
+    """Write content to a file. Path can be absolute or relative to the workspace directory. Creates parent directories as needed."""
+    p = Path(path) if Path(path).is_absolute() else _WORKSPACE / path
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return f"Written: {p}"
+    except Exception as e:
+        return f"Error writing file: {e}"
+
+
+@mcp.tool()
+def run_command(command: str, cwd: str = "") -> str:
+    """Run a shell command and return its output. Runs in the workspace directory by default. Use cwd to override."""
+    working_dir = Path(cwd) if cwd else _WORKSPACE
+    try:
+        result = subprocess.run(
+            command, shell=True, cwd=working_dir,
+            capture_output=True, text=True, timeout=60
+        )
+        out = result.stdout.strip()
+        err = result.stderr.strip()
+        if result.returncode != 0:
+            return f"Exit {result.returncode}\n{err or out}"
+        return out or "(no output)"
+    except subprocess.TimeoutExpired:
+        return "Command timed out after 60 seconds."
+    except Exception as e:
+        return f"Error: {e}"
 
 
 def _run_role(role_file: str, task: str) -> str:

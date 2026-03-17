@@ -1,4 +1,5 @@
-"""Heartbeat script — fires due reminders. Run via Windows Task Scheduler every ~30 min."""
+#!/usr/bin/env python3
+"""Heartbeat — fires due reminders. Run via Windows Task Scheduler every ~30 minutes."""
 import os
 import sys
 sys.path.insert(0, os.path.dirname(__file__))

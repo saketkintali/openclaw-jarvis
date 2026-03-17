@@ -16,14 +16,20 @@ if sys.stdout.encoding != 'utf-8':
     sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', closefd=False)
 
 # ── Credentials & defaults ────────────────────────────────────────────────────
-WHATSAPP_TARGET       = os.environ.get("WHATSAPP_TARGET", "")         # Your WhatsApp number
-GATEWAY_TOKEN         = os.environ.get("GATEWAY_TOKEN", "")           # From openclaw.json → gateway.token
-DEFAULT_LOCATION      = os.environ.get("DEFAULT_LOCATION", "10001")   # ZIP code or city name
+# Load .env if present (never commit .env to git)
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        if _line.strip() and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+
+WHATSAPP_TARGET       = os.environ.get("WHATSAPP_TARGET", "")           # Your WhatsApp number (E.164 format)
+GATEWAY_TOKEN         = os.environ.get("GATEWAY_TOKEN", "")             # From openclaw.json → gateway.token
+DEFAULT_LOCATION      = os.environ.get("DEFAULT_LOCATION", "10001")     # ZIP code or city name
 DEFAULT_LOCATION_NAME = os.environ.get("DEFAULT_LOCATION_NAME", "New York")  # Human-readable city name
 
-GROQ_API_KEY          = os.environ.get("GROQ_API_KEY", "")            # From console.groq.com
-GROQ_MODEL            = "llama-3.3-70b-versatile"
-TMDB_API_KEY          = os.environ.get("TMDB_API_KEY", "")            # From themoviedb.org/settings/api
+TMDB_API_KEY          = os.environ.get("TMDB_API_KEY", "")
 
 # ── Weather codes ─────────────────────────────────────────────────────────────
 WEATHER_CODES = {
@@ -98,10 +104,10 @@ def is_reminder_question(text):
 # ── Reminders ─────────────────────────────────────────────────────────────────
 REMINDERS_FILE = Path(os.environ.get("USERPROFILE", ".")) / ".openclaw" / "workspace" / "reminders.json"
 
-def parse_reminder_groq(text):
-    """Use Groq to extract task + datetime from natural language. Returns (task, iso_str) or None."""
-    import urllib.request, urllib.error, json as _json
+def parse_reminder_claude(text):
+    """Use Claude to extract task + datetime from natural language. Returns (task, iso_str) or None."""
     from datetime import datetime as _dt
+    import json as _json
     now = _dt.now()
     system = (
         "You are a reminder time parser. Extract the task and time from a reminder request. "
@@ -114,29 +120,16 @@ def parse_reminder_groq(text):
         f"Today is {now.strftime('%Y-%m-%d')}, current time is {now.strftime('%H:%M')}. "
         f"Parse this reminder request: \"{text}\""
     )
-    payload = _json.dumps({
-        "model": GROQ_MODEL,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user",   "content": user_msg}],
-        "max_tokens": 80,
-        "temperature": 0,
-    }).encode("utf-8")
     try:
-        req = urllib.request.Request(
-            "https://api.groq.com/openai/v1/chat/completions",
-            data=payload,
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {GROQ_API_KEY}"},
-        )
-        resp = urllib.request.urlopen(req, timeout=15)
-        content = _json.loads(resp.read())["choices"][0]["message"]["content"].strip()
-        s, e = content.find("{"), content.rfind("}") + 1
-        if s >= 0 and e > s:
-            parsed = _json.loads(content[s:e])
-            task = parsed.get("task", "").strip()
-            remind_at = parsed.get("remind_at", "").strip()
-            if task and remind_at:
-                return task, remind_at
+        content = get_ai_response(user_msg, instructions=system)
+        if content:
+            s, e = content.find("{"), content.rfind("}") + 1
+            if s >= 0 and e > s:
+                parsed = _json.loads(content[s:e])
+                task = parsed.get("task", "").strip()
+                remind_at = parsed.get("remind_at", "").strip()
+                if task and remind_at:
+                    return task, remind_at
     except Exception as ex:
         print(f"Reminder parse error: {ex}")
     return None
@@ -384,7 +377,7 @@ def fetch_nearby(user_query, location=None):
     """
     import math, json as _j
 
-    # 1. Use Groq to extract amenity type + optional cuisine from the query
+    # 1. Use Claude to extract amenity type + optional cuisine from the query
     extract_system = (
         "Extract the place type from the user query. Reply with ONLY valid JSON, no other text.\n"
         "Format: {\"amenity\": \"osm_amenity_value\", \"cuisine\": \"cuisine_or_null\"}\n"
@@ -396,31 +389,14 @@ def fetch_nearby(user_query, location=None):
     amenity = "restaurant"
     cuisine = None
     try:
-        payload = _j.dumps({
-            "model": "llama-3.1-8b-instant",
-            "messages": [
-                {"role": "system", "content": extract_system},
-                {"role": "user",   "content": user_query},
-            ],
-            "max_tokens": 60,
-            "temperature": 0,
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            "https://api.groq.com/openai/v1/chat/completions",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            },
-        )
-        raw = _j.loads(urllib.request.urlopen(req, timeout=10).read())["choices"][0]["message"]["content"].strip()
-        parsed = _j.loads(raw)
-        amenity = parsed.get("amenity", "restaurant").strip()
-        cuisine = parsed.get("cuisine") or None
-        print(f"nearby: amenity={amenity}, cuisine={cuisine}")
+        raw = get_ai_response(user_query, instructions=extract_system)
+        if raw:
+            parsed = _j.loads(raw)
+            amenity = parsed.get("amenity", "restaurant").strip()
+            cuisine = parsed.get("cuisine") or None
+            print(f"nearby: amenity={amenity}, cuisine={cuisine}")
     except Exception as e:
-        print(f"nearby: Groq extract error: {e} — defaulting to restaurant")
+        print(f"nearby: Claude extract error: {e} — defaulting to restaurant")
 
     # 2. Geocode location
     r = geocode(location or DEFAULT_LOCATION)
@@ -1001,7 +977,7 @@ def create_calendar_event_zapier(query):
         print(f"Zapier create calendar error: {e}")
         return None
 
-# ── Groq ──────────────────────────────────────────────────────────────────────
+# ── Claude responses ──────────────────────────────────────────────────────────
 JARVIS_INSTRUCTIONS = (
     "You are JARVIS, the highly intelligent and formal AI assistant from the Iron Man "
     "and Avengers films. Respond with a refined British manner. "
@@ -1021,39 +997,17 @@ _JARVIS_KNOWLEDGE_SUFFIX = (
     "information you have and briefly note it may not reflect the very latest."
 )
 
-def get_groq_response(user_text, allow_knowledge=False):
-    """Call Groq API with Jarvis system prompt. Returns text or None.
+def get_claude_response(user_text, allow_knowledge=False):
+    """Call Claude with Jarvis system prompt. Returns text or None.
     allow_knowledge=True: permits answering from training data (general queries).
     allow_knowledge=False: strict mode — only report provided data (weather/calendar/email).
     """
-    import urllib.request, urllib.error, json as _json
     system = JARVIS_INSTRUCTIONS + (_JARVIS_KNOWLEDGE_SUFFIX if allow_knowledge else "")
-    payload = _json.dumps({
-        "model": GROQ_MODEL,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": user_text},
-        ],
-        "max_tokens": 150,
-        "temperature": 0.7,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        },
-    )
     try:
-        resp = urllib.request.urlopen(req, timeout=30)
-        data = _json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"].strip()
+        return get_ai_response(user_text, instructions=system)
     except Exception as e:
-        print(f"Groq error: {e}")
+        print(f"Claude response error: {e}")
         return None
-
 
 # ── TMDB movies ───────────────────────────────────────────────────────────────
 def fetch_movies_tmdb(query):
@@ -1062,40 +1016,27 @@ def fetch_movies_tmdb(query):
         return None
     import urllib.request, urllib.error, json as _json, datetime as _dt
 
-    # Extract person name + role using Groq 8b
-    extract_payload = _json.dumps({
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content":
-                "Extract the person's name from the movie query and normalize it to the correct full name — fix spelling, phonetic errors, and missing spaces (e.g. 'shahrukh khan' → 'Shah Rukh Khan', 'tomhanks' → 'Tom Hanks', 'matt demon' → 'Matt Damon', 'leo decaprio' → 'Leonardo DiCaprio'). Reply ONLY with valid JSON.\n"
-                "Format: {\"name\": \"Full Name\", \"role\": \"actor\" or \"director\"}\n"
-                "If no person name found, return {\"name\": null, \"role\": null}"},
-            {"role": "user", "content": query},
-        ],
-        "max_tokens": 50,
-        "temperature": 0,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=extract_payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "User-Agent": "Mozilla/5.0",
-        },
+    # Extract person name + role using Claude
+    extract_system = (
+        "Extract the person's name from the movie query and normalize it to the correct full name — "
+        "fix spelling, phonetic errors, and missing spaces (e.g. 'shahrukh khan' → 'Shah Rukh Khan', "
+        "'tomhanks' → 'Tom Hanks', 'matt demon' → 'Matt Damon', 'leo decaprio' → 'Leonardo DiCaprio'). "
+        "Reply ONLY with valid JSON.\n"
+        "Format: {\"name\": \"Full Name\", \"role\": \"actor\" or \"director\"}\n"
+        "If no person name found, return {\"name\": null, \"role\": null}"
     )
     person_name = None
     role = "actor"
     try:
-        resp = urllib.request.urlopen(req, timeout=10)
-        raw = _json.loads(resp.read())["choices"][0]["message"]["content"].strip()
-        # Strip markdown code fences if Groq wrapped the JSON
-        if "```" in raw:
-            import re as _re
-            m = _re.search(r'\{.*?\}', raw, _re.DOTALL)
-            raw = m.group(0) if m else raw
-        parsed = _json.loads(raw)
-        person_name = parsed.get("name")
+        raw = get_ai_response(query, instructions=extract_system)
+        if raw:
+            # Strip markdown code fences if Claude wrapped the JSON
+            if "```" in raw:
+                import re as _re
+                m = _re.search(r'\{.*?\}', raw, _re.DOTALL)
+                raw = m.group(0) if m else raw
+            parsed = _json.loads(raw)
+            person_name = parsed.get("name")
         role = (parsed.get("role") or "actor").lower()
         print(f"TMDB extracted: name={person_name}, role={role}")
     except Exception as e:
@@ -1199,7 +1140,7 @@ _INTENT_CATEGORIES = {
 }
 
 def _keyword_fallback(text):
-    """Safety net if Groq classification fails."""
+    """Safety net if Claude classification fails."""
     if is_reminder_question(text):        return "reminder"
     if is_weather_question(text):         return "weather"
     if is_time_question(text):            return "time"
@@ -1216,7 +1157,7 @@ def _keyword_fallback(text):
     return "general"
 
 def classify_intent(text):
-    """Classify user intent and extract location via Groq (llama-3.1-8b-instant, temp=0).
+    """Classify user intent and extract location via Claude.
     Returns (intent, location) where location is a city/place string or None."""
     import urllib.request, urllib.error, json as _json
     system = (
@@ -1236,39 +1177,21 @@ def classify_intent(text):
         "location: the specific city or place explicitly mentioned, or null if none. "
         "Do not infer locations from context (e.g. 'a walk', 'a trip', 'outside' are not locations)."
     )
-    payload = _json.dumps({
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": text},
-        ],
-        "max_tokens": 50,
-        "temperature": 0,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        },
-    )
     try:
-        resp = urllib.request.urlopen(req, timeout=10)
-        raw = _json.loads(resp.read())["choices"][0]["message"]["content"].strip()
-        parsed = _json.loads(raw)
-        intent = parsed.get("intent", "").strip().lower()
-        location = parsed.get("location") or None
-        if location:
-            location = str(location).strip()
-        if intent not in _INTENT_CATEGORIES:
-            intent = _keyword_fallback(text)
-        print(f"classify_intent: '{text[:60]}' → {intent}, location={location}")
-        return intent, location
+        raw = get_ai_response(text, instructions=system)
+        if raw:
+            parsed = _json.loads(raw)
+            intent = parsed.get("intent", "").strip().lower()
+            location = parsed.get("location") or None
+            if location:
+                location = str(location).strip()
+            if intent not in _INTENT_CATEGORIES:
+                intent = _keyword_fallback(text)
+            print(f"classify_intent: '{text[:60]}' → {intent}, location={location}")
+            return intent, location
     except Exception as e:
         print(f"classify_intent error: {e} — using keyword fallback")
-        return _keyword_fallback(text), None
+    return _keyword_fallback(text), None
 
 def _strip_emoji(text):
     """Remove emoji characters so TTS doesn't read them aloud."""

@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from jarvis import (
-    send_whatsapp, send_whatsapp_audio, get_ai_response,
+    send_whatsapp, get_ai_response,
 )
 
 MEDIA_DIR  = Path(os.environ.get("USERPROFILE", ".")) / ".openclaw" / "media" / "inbound"
@@ -87,11 +87,10 @@ def main():
                 state["processed"] = list(processed)
                 save_state(state)
 
-                if response:
-                    # Try audio reply first, fall back to text
-                    if not send_whatsapp_audio(response):
-                        send_whatsapp(response)
-                else:
+                if response and response.strip().upper() != "NO_REPLY":
+                    # Always reply with text — audio replies are only for explicit "aloud/speak" requests
+                    send_whatsapp(response)
+                elif not response:
                     send_whatsapp("Sorry, I couldn't process that audio message.")
             else:
                 print(f"Transcription failed for {audio_file.name}")
